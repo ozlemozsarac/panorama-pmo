@@ -17,7 +17,7 @@ export function AuthProvider({ children }) {
     if (!session?.user) { setProfile(null); return }
     supabase.from('profiles')
       .select('*, job_titles(ad), hubs(ad, renk)')
-      .eq('id', session.user.id).single()
+      .eq('auth_user_id', session.user.id).single()
       .then(({ data }) => setProfile(data))
   }, [session])
 

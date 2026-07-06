@@ -7,7 +7,7 @@ export default function EkipSemasi() {
   const [hublar, setHublar] = useState([])
   const [kisiler, setKisiler] = useState([])
   const [atamalar, setAtamalar] = useState([])
-  const [acik, setAcik] = useState(null) // açık kişi id
+  const [acik, setAcik] = useState(null)
 
   useEffect(() => { yukle() }, [])
 
@@ -15,13 +15,22 @@ export default function EkipSemasi() {
     const [{ data: h }, { data: k }, { data: a }] = await Promise.all([
       supabase.from('hubs').select('*').order('sira'),
       supabase.from('profiles').select('*, job_titles ( ad, sira )').eq('aktif', true).order('ad'),
-      supabase.from('project_assignments').select('user_id, proje_lideri, projects ( ad )')
+      supabase.from('project_assignments').select('user_id, proje_lideri, projects ( ad, customers ( hub_id, hubs ( ad, renk ) ) )')
     ])
     setHublar(h || []); setKisiler(k || []); setAtamalar(a || [])
   }
 
   const gorunenHublar = seesAll ? hublar : hublar.filter(h => h.id === profile.hub_id)
   const yonetim = kisiler.filter(k => !k.hub_id)
+
+  // Bir kişinin dış hub projelerini (ödünç gittiği) döndürür
+  function disProjeler(kisi) {
+    return atamalar.filter(a =>
+      a.user_id === kisi.id &&
+      a.projects?.customers?.hub_id &&
+      a.projects.customers.hub_id !== kisi.hub_id
+    )
+  }
 
   return (
     <>
@@ -59,11 +68,11 @@ export default function EkipSemasi() {
                 <h2 style={{ marginBottom: 2 }}>{h.ad}</h2>
                 <span className="chip">{ekip.length} kişi</span>
               </div>
-              <div style={{ color: 'var(--ink-3)', fontSize: 13, marginBottom: 12 }}>
-                {yonetici ? yonetici.ad : 'Hub yöneticisi atanmamış'}
+              <div style={{ color: yonetici ? 'var(--accent)' : 'var(--ink-3)', fontSize: 13, marginBottom: 12 }}>
+                {yonetici ? '★ ' + yonetici.ad + ' (hub yöneticisi)' : 'Hub yöneticisi atanmamış'}
               </div>
               {ekip.length === 0 && (
-                <div className="empty"><strong>Ekip henüz tanımlanmadı</strong>Yönetim panelinden kullanıcı ekleyin.</div>
+                <div className="empty"><strong>Ekip henüz tanımlanmadı</strong>Yönetim panelinden kişi ekleyin.</div>
               )}
               {Object.entries(gruplar).map(([unvan, grup]) => (
                 <div key={unvan} style={{ marginBottom: 10 }}>
@@ -72,20 +81,35 @@ export default function EkipSemasi() {
                   </div>
                   {grup.map(k => {
                     const projeleri = atamalar.filter(a => a.user_id === k.id)
+                    const dis = disProjeler(k)
                     return (
                       <div key={k.id}>
                         <div className="person-row" style={{ cursor: 'pointer' }}
                           onClick={() => setAcik(acik === k.id ? null : k.id)}>
-                          <span>{k.ad || k.eposta}</span>
+                          <span>
+                            {k.ad || k.eposta}
+                            {dis.length > 0 && (
+                              <span className="chip warn" style={{ marginLeft: 6, fontSize: 11 }}>
+                                → {dis.map(x => x.projects.customers.hubs.ad).filter((v, i, s) => s.indexOf(v) === i).join(', ')}
+                              </span>
+                            )}
+                          </span>
                           <span className="chip">{projeleri.length} proje</span>
                         </div>
                         {acik === k.id && (
                           <div style={{ padding: '4px 0 8px 12px', fontSize: 13, color: 'var(--ink-2)' }}>
                             {projeleri.length === 0
                               ? 'Proje ataması yok.'
-                              : projeleri.map((a, i) => (
-                                  <div key={i}>{a.projects?.ad}{a.proje_lideri ? ' · lider' : ''}</div>
-                                ))}
+                              : projeleri.map((a, i) => {
+                                  const disMi = a.projects?.customers?.hub_id !== k.hub_id
+                                  return (
+                                    <div key={i}>
+                                      {a.projects?.ad}
+                                      {a.proje_lideri ? ' · lider' : ''}
+                                      {disMi && <span style={{ color: 'var(--warn)' }}> · {a.projects.customers.hubs.ad} (ödünç)</span>}
+                                    </div>
+                                  )
+                                })}
                           </div>
                         )}
                       </div>

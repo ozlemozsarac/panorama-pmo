@@ -29,7 +29,8 @@ export default function Projelerim() {
     if (error) { console.error(error); setProjeler([]); return }
 
     let list = data || []
-    // PM ve ekip üyesi: yalnızca atandığı projeler (RLS hub genelini okutur, UI atananları gösterir)
+    // PM ve ekip üyesi: atandığı projeler (kendi hub'ı dışındaki çapraz atamalar dahil).
+    // RLS zaten yalnızca yetkili satırları döndürür; burada atanmışları öne alıyoruz.
     if (!seesAll && !isHubYon) {
       list = list.filter(p => p.project_assignments.some(a => a.user_id === profile.id))
     }
