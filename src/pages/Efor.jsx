@@ -1,168 +1,203 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase, haftaBasi, isoDate } from '../lib/supabase'
+import { supabase, haftaBasi, isoDate, DURUMLAR } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-const GUN_ADLARI = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
-
+// Efor Özet — iş kalemlerinden otomatik toplanan izleme dashboard'u
 export default function Efor() {
-  const { profile } = useAuth()
-  const [hafta, setHafta] = useState(haftaBasi())
-  const [mod, setMod] = useState('haftalik') // haftalik | gunluk
+  const { profile, seesAll, isHubYon } = useAuth()
+  const [donem, setDonem] = useState('hafta') // hafta | ay | yil
+  const [efor, setEfor] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [kisiler, setKisiler] = useState([])
   const [projeler, setProjeler] = useState([])
-  const [kayitlar, setKayitlar] = useState([])
-  const [taslak, setTaslak] = useState({}) // { "projeId" | "projeId|gun" : "saat" }
-  const [msg, setMsg] = useState(null)
+  const [urunlerList, setUrunlerList] = useState([])
+  const [isTipleri, setIsTipleri] = useState([])
+  const [hublar, setHublar] = useState([])
+  const [seciliKisi, setSeciliKisi] = useState('') // '' = tümü (yetkiye göre)
+  const [yukleniyor, setYukleniyor] = useState(true)
 
-  const haftaStr = isoDate(hafta)
-  const gunler = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => { const d = new Date(hafta); d.setDate(d.getDate() + i); return d }),
-    [hafta]
-  )
-
-  useEffect(() => { yukle() }, [haftaStr])
+  useEffect(() => { yukle() }, [])
 
   async function yukle() {
-    const [{ data: atamalar }, { data: entries }] = await Promise.all([
-      supabase.from('project_assignments')
-        .select('projects ( id, ad, customers ( ad, hubs ( renk ) ) )')
-        .eq('user_id', profile.id),
-      supabase.from('effort_entries').select('*')
-        .eq('user_id', profile.id).eq('hafta_baslangici', haftaStr)
+    setYukleniyor(true)
+    const [ef, t, ki, pr, ur, it, hb] = await Promise.all([
+      supabase.from('effort_entries').select('*'),
+      supabase.from('tasks').select('id, durum, blokaj, kritik, is_tipi_id, product_id, project_id'),
+      supabase.from('profiles').select('id, ad, hub_id, yetki_rolu').eq('aktif', true),
+      supabase.from('projects').select('id, ad, customers ( hub_id, hubs ( ad, renk ) )'),
+      supabase.from('products').select('*'),
+      supabase.from('work_types').select('*').order('sira'),
+      supabase.from('hubs').select('*').order('sira')
     ])
-    setProjeler((atamalar || []).map(a => a.projects).filter(Boolean).sort((a, b) => a.ad.localeCompare(b.ad, 'tr')))
-    setKayitlar(entries || [])
-    setTaslak({})
-    setMsg(null)
+    setEfor(ef.data || []); setTasks(t.data || []); setKisiler(ki.data || [])
+    setProjeler(pr.data || []); setUrunlerList(ur.data || []); setIsTipleri(it.data || [])
+    setHublar(hb.data || [])
+    setYukleniyor(false)
   }
 
-  function mevcut(projeId, gun = null) {
-    const e = kayitlar.find(k => k.project_id === projeId && (gun ? k.gun === gun : k.gun === null))
-    return e ? String(e.saat) : ''
-  }
+  // Dönem filtresi: seçili döneme giren efor kayıtları
+  const donemBaslangic = useMemo(() => {
+    const now = new Date()
+    if (donem === 'hafta') return haftaBasi(now)
+    if (donem === 'ay') return new Date(now.getFullYear(), now.getMonth(), 1)
+    return new Date(now.getFullYear(), 0, 1) // yıl
+  }, [donem])
 
-  function deger(projeId, gun = null) {
-    const key = gun ? projeId + '|' + gun : projeId
-    return key in taslak ? taslak[key] : mevcut(projeId, gun)
-  }
+  // Bu kullanıcının görebileceği kişi kapsamı
+  const gorunenKisiler = useMemo(() => {
+    if (seesAll) return kisiler
+    if (isHubYon) return kisiler.filter(k => k.hub_id === profile.hub_id)
+    return kisiler.filter(k => k.id === profile.id)
+  }, [kisiler, seesAll, isHubYon, profile])
 
-  function setDeger(projeId, gun, v) {
-    const key = gun ? projeId + '|' + gun : projeId
-    setTaslak(t => ({ ...t, [key]: v }))
-  }
+  const gorunenKisiIds = new Set(gorunenKisiler.map(k => k.id))
 
-  async function hucreyiKaydet(projeId, gun = null) {
-    const key = gun ? projeId + '|' + gun : projeId
-    if (!(key in taslak)) return
-    const v = parseFloat(String(taslak[key]).replace(',', '.'))
-    const eski = kayitlar.find(k => k.project_id === projeId && (gun ? k.gun === gun : k.gun === null))
+  // Filtrelenmiş efor: dönem + kişi kapsamı + (opsiyonel) seçili kişi
+  const filtreliEfor = useMemo(() => {
+    const bas = isoDate(donemBaslangic)
+    return efor.filter(e => {
+      if (e.hafta_baslangici < bas) return false
+      if (!gorunenKisiIds.has(e.user_id)) return false
+      if (seciliKisi && e.user_id !== seciliKisi) return false
+      return true
+    })
+  }, [efor, donemBaslangic, gorunenKisiIds, seciliKisi])
 
-    let error = null
-    if (!v || v <= 0) {
-      if (eski) ({ error } = await supabase.from('effort_entries').delete().eq('id', eski.id))
-    } else if (eski) {
-      ({ error } = await supabase.from('effort_entries').update({ saat: v }).eq('id', eski.id))
-    } else {
-      ({ error } = await supabase.from('effort_entries').insert({
-        user_id: profile.id, project_id: projeId, hafta_baslangici: haftaStr, gun, saat: v
-      }))
-    }
-    if (error) { setMsg({ tip: 'err', metin: 'Kaydedilemedi: ' + error.message }); return }
-    setMsg({ tip: 'ok', metin: 'Kaydedildi' })
-    const { data } = await supabase.from('effort_entries').select('*')
-      .eq('user_id', profile.id).eq('hafta_baslangici', haftaStr)
-    setKayitlar(data || [])
-    setTaslak(t => { const c = { ...t }; delete c[key]; return c })
-  }
+  const toplamSaat = filtreliEfor.reduce((s, e) => s + Number(e.saat), 0)
 
-  function haftaKaydir(n) {
-    const d = new Date(hafta); d.setDate(d.getDate() + 7 * n); setHafta(d)
-  }
+  // Kırılımlar
+  const projeKirilim = kirilim(filtreliEfor, e => e.project_id, projeler, p => p.ad)
+  const urunKirilim = kirilim(filtreliEfor, e => e.product_id, urunlerList, u => u.ad)
+  const taskMap = Object.fromEntries(tasks.map(t => [t.id, t]))
+  const tipKirilim = kirilim(filtreliEfor, e => taskMap[e.task_id]?.is_tipi_id, isTipleri, t => t.ad)
 
-  const projeToplam = pid => kayitlar.filter(k => k.project_id === pid).reduce((s, k) => s + Number(k.saat), 0)
-  const haftaToplam = kayitlar.reduce((s, k) => s + Number(k.saat), 0)
-  const sonGun = new Date(gunler[6])
+  // Hub bazlı toplam
+  const projeHub = Object.fromEntries(projeler.map(p => [p.id, p.customers?.hub_id]))
+  const hubKirilim = {}
+  filtreliEfor.forEach(e => {
+    const h = projeHub[e.project_id]
+    if (h) hubKirilim[h] = (hubKirilim[h] || 0) + Number(e.saat)
+  })
+
+  // Kişi bazlı toplam
+  const kisiKirilim = {}
+  filtreliEfor.forEach(e => { kisiKirilim[e.user_id] = (kisiKirilim[e.user_id] || 0) + Number(e.saat) })
+
+  // Blokaj / kritik yoğunluğu (görünür kişilerin sorumlu olduğu açık işlerde)
+  const gorunurTaskIds = new Set(filtreliEfor.map(e => e.task_id))
+  const ilgiliTasks = tasks.filter(t => gorunurTaskIds.has(t.id) && t.durum !== 'tamamlandi')
+  const blokajSayi = ilgiliTasks.filter(t => t.blokaj).length
+  const kritikSayi = ilgiliTasks.filter(t => t.kritik).length
+
+  const donemAdi = { hafta: 'Bu hafta', ay: 'Bu ay', yil: 'Bu yıl' }[donem]
+
+  if (yukleniyor) return <p>Yükleniyor…</p>
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>Efor girişi</h1>
-          <p>Saat cinsinden girin. Haftalık toplam yeterli; isterseniz günlük detaya geçebilirsiniz.</p>
-        </div>
-        <div className="week-nav">
-          <button className="btn ghost sm" onClick={() => haftaKaydir(-1)}>←</button>
-          <span className="label">
-            {hafta.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })} – {sonGun.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </span>
-          <button className="btn ghost sm" onClick={() => haftaKaydir(1)}>→</button>
+          <h1>Efor Özet</h1>
+          <p>{seesAll ? 'Tüm ekiplerin' : isHubYon ? 'Ekibinizin' : 'Kendi'} efor dağılımı · iş kalemlerinden otomatik toplanır</p>
         </div>
       </div>
 
-      <div className="filters">
-        <button className={'filter-chip' + (mod === 'haftalik' ? ' active' : '')} onClick={() => setMod('haftalik')}>Haftalık</button>
-        <button className={'filter-chip' + (mod === 'gunluk' ? ' active' : '')} onClick={() => setMod('gunluk')}>Günlük detay</button>
-        <span className="chip" style={{ marginLeft: 'auto' }}>Hafta toplamı: {haftaToplam} saat</span>
+      <div className="filters" style={{ justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[['hafta', 'Haftalık'], ['ay', 'Aylık'], ['yil', 'Yıllık']].map(([v, l]) => (
+            <button key={v} className={'filter-chip' + (donem === v ? ' active' : '')} onClick={() => setDonem(v)}>{l}</button>
+          ))}
+        </div>
+        {(seesAll || isHubYon) && (
+          <select value={seciliKisi} onChange={e => setSeciliKisi(e.target.value)} style={{ maxWidth: 220 }}>
+            <option value="">Tüm kişiler</option>
+            {gorunenKisiler.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
+          </select>
+        )}
       </div>
 
-      {projeler.length === 0 ? (
+      {/* KPI kartları */}
+      <div className="grid grid-4" style={{ marginBottom: 22 }}>
+        <div className="card kpi">
+          <div className="num">{Math.round(toplamSaat)}</div>
+          <div className="lbl">{donemAdi} toplam saat</div>
+        </div>
+        <div className="card kpi">
+          <div className="num">{Object.keys(kisiKirilim).length}</div>
+          <div className="lbl">Efor giren kişi</div>
+        </div>
+        <div className="card kpi">
+          <div className="num" style={{ color: blokajSayi ? 'var(--danger)' : undefined }}>{blokajSayi}</div>
+          <div className="lbl">Bloklu iş</div>
+        </div>
+        <div className="card kpi">
+          <div className="num" style={{ color: kritikSayi ? 'var(--warn)' : undefined }}>{kritikSayi}</div>
+          <div className="lbl">Kritik iş</div>
+        </div>
+      </div>
+
+      {toplamSaat === 0 ? (
         <div className="empty">
-          <strong>Atandığınız proje yok</strong>
-          Efor girebilmeniz için hub yöneticinizin sizi bir projeye ataması gerekiyor.
+          <strong>{donemAdi} için efor kaydı yok</strong>
+          İş kalemlerine efor girildikçe dağılım burada görünecek.
         </div>
       ) : (
-        <div className="card efor-grid" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th style={{ minWidth: 220 }}>Proje</th>
-                {mod === 'haftalik'
-                  ? <th>Saat</th>
-                  : gunler.slice(0, 5).map((g, i) => (
-                      <th key={i}>{GUN_ADLARI[i]} {g.getDate()}</th>
-                    ))}
-                <th>Toplam</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projeler.map(p => (
-                <tr key={p.id}>
-                  <td>
-                    <span className="hub-dot" style={{ background: p.customers.hubs.renk, marginRight: 7 }} />
-                    <span style={{ fontWeight: 500 }}>{p.ad}</span>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginLeft: 15 }}>{p.customers.ad}</div>
-                  </td>
-                  {mod === 'haftalik' ? (
-                    <td>
-                      <input inputMode="decimal" placeholder="0"
-                        value={deger(p.id)}
-                        onChange={e => setDeger(p.id, null, e.target.value)}
-                        onBlur={() => hucreyiKaydet(p.id)} />
-                    </td>
-                  ) : gunler.slice(0, 5).map((g, i) => {
-                    const gs = isoDate(g)
-                    return (
-                      <td key={i}>
-                        <input inputMode="decimal" placeholder="0"
-                          value={deger(p.id, gs)}
-                          onChange={e => setDeger(p.id, gs, e.target.value)}
-                          onBlur={() => hucreyiKaydet(p.id, gs)} />
-                      </td>
-                    )
-                  })}
-                  <td style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{projeToplam(p.id) || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <>
+          {/* Kişi bazlı (yalnızca hub yön / direktör) */}
+          {(seesAll || isHubYon) && (
+            <BarBlok baslik="Kişi bazlı" veri={Object.entries(kisiKirilim)
+              .map(([id, s]) => ({ ad: kisiler.find(k => k.id === id)?.ad || '—', saat: s }))
+              .sort((a, b) => b.saat - a.saat)} toplam={toplamSaat} />
+          )}
 
-      {msg && <div className={'msg ' + (msg.tip === 'err' ? 'err' : 'ok')}>{msg.metin}</div>}
-      {mod === 'gunluk' && (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
-          Not: Haftalık ve günlük girişler ayrı kayıtlardır; aynı proje için ikisini birden doldurursanız toplama ikisi de dahil olur.
-        </p>
+          <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', marginTop: 14 }}>
+            <BarBlok baslik="Proje bazlı" veri={projeKirilim} toplam={toplamSaat} />
+            <BarBlok baslik="Ürün bazlı" veri={urunKirilim} toplam={toplamSaat} />
+          </div>
+          <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', marginTop: 14 }}>
+            <BarBlok baslik="İş tipi bazlı" veri={tipKirilim} toplam={toplamSaat} />
+            {seesAll && (
+              <BarBlok baslik="Hub bazlı" veri={Object.entries(hubKirilim)
+                .map(([id, s]) => ({ ad: hublar.find(h => h.id === id)?.ad || '—', saat: s, renk: hublar.find(h => h.id === id)?.renk }))
+                .sort((a, b) => b.saat - a.saat)} toplam={toplamSaat} />
+            )}
+          </div>
+        </>
       )}
     </>
+  )
+}
+
+function kirilim(eforlar, keyFn, liste, adFn) {
+  const acc = {}
+  eforlar.forEach(e => { const k = keyFn(e); if (k) acc[k] = (acc[k] || 0) + Number(e.saat) })
+  return Object.entries(acc)
+    .map(([id, saat]) => ({ ad: adFn(liste.find(x => x.id === id) || {}) || '—', saat }))
+    .sort((a, b) => b.saat - a.saat)
+}
+
+function BarBlok({ baslik, veri, toplam }) {
+  const max = Math.max(...veri.map(v => v.saat), 1)
+  return (
+    <div className="card">
+      <h2>{baslik}</h2>
+      {veri.length === 0 ? <p style={{ color: 'var(--ink-3)', fontSize: 14 }}>Veri yok.</p> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {veri.map((v, i) => (
+            <div key={i}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, marginBottom: 2 }}>
+                <span>{v.ad}</span>
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: 'var(--ink-2)' }}>
+                  {Math.round(v.saat)} sa · %{Math.round(v.saat / toplam * 100)}
+                </span>
+              </div>
+              <div style={{ height: 6, background: 'var(--paper)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: (v.saat / max * 100) + '%', background: v.renk || 'var(--accent)', borderRadius: 3 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

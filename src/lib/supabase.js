@@ -27,6 +27,19 @@ export const ROLLER = {
   ekip: 'Ekip Üyesi'
 }
 
+export const URUN_DURUMLARI = {
+  acik: 'Açık',
+  kapali: 'Kapalı',
+  yd_devir: 'YD Devir Aşamasında'
+}
+
+// Ürün durumu renkleri: Kapalı yeşil, YD Devir amber, Açık gri
+export const URUN_DURUM_RENK = {
+  acik:     { bg: '#F1EFE8', fg: '#5F5E5A' },
+  kapali:   { bg: '#E4F3EC', fg: '#1C7A52' },
+  yd_devir: { bg: '#FBF1DD', fg: '#A06A10' }
+}
+
 // Pazartesi bazlı hafta başlangıcı
 export function haftaBasi(d = new Date()) {
   const x = new Date(d)

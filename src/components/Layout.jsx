@@ -22,7 +22,7 @@ export default function Layout({ children }) {
         </div>
         {seesAll && item('/ozet', 'Özet')}
         {item('/projeler', 'Projeler')}
-        {item('/efor', 'Efor')}
+        {item('/efor', 'Efor Özet')}
         {item('/izin', 'İzin')}
         {item('/ekip', 'Ekip şeması')}
         {isAdmin && item('/admin', 'Yönetim')}

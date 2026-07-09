@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { supabase, ROLLER, fmtTarih } from '../lib/supabase'
+import { supabase, ROLLER, fmtTarih, URUN_DURUMLARI, URUN_DURUM_RENK } from '../lib/supabase'
 
-const TABS = ['Müşteriler', 'Projeler', 'Ekip', 'Atamalar', 'Maliyet', 'Listeler']
+const TABS = ['Müşteriler', 'Projeler', 'Ürün Durumları', 'Ekip', 'Atamalar', 'Maliyet', 'Listeler']
 
 export default function Admin() {
   const [tab, setTab] = useState('Müşteriler')
@@ -16,7 +16,7 @@ export default function Admin() {
       supabase.from('customers').select('*, hubs ( ad, renk )').order('ad'),
       supabase.from('projects').select('*, customers ( ad, hub_id )').order('ad'),
       supabase.from('products').select('*').order('ad'),
-      supabase.from('project_products').select('*'),
+      supabase.from('project_products').select('*, products ( ad )'),
       supabase.from('profiles').select('*, job_titles ( ad ), hubs ( ad )').order('ad'),
       supabase.from('job_titles').select('*').order('sira'),
       supabase.from('work_types').select('*').order('sira'),
@@ -63,6 +63,7 @@ export default function Admin() {
 
       {tab === 'Müşteriler' && <Musteriler {...props} />}
       {tab === 'Projeler' && <Projeler {...props} />}
+      {tab === 'Ürün Durumları' && <UrunDurumlari {...props} />}
       {tab === 'Ekip' && <Ekip {...props} />}
       {tab === 'Atamalar' && <Atamalar {...props} />}
       {tab === 'Maliyet' && <Maliyet {...props} />}
@@ -490,6 +491,76 @@ function Maliyet({ d, run }) {
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
+function UrunDurumlari({ d, run }) {
+  const [hubFilter, setHubFilter] = useState('')
+  const urunler = d.products
+  const projeler = d.projects.filter(p => p.aktif && (!hubFilter || p.customers.hub_id === hubFilter))
+
+  async function durumGuncelle(projectId, productId, durum) {
+    await run(supabase.from('project_products').update({ durum: durum || null })
+      .eq('project_id', projectId).eq('product_id', productId), 'Güncellendi')
+  }
+
+  async function versiyonGuncelle(projectId, productId, versiyon) {
+    await run(supabase.from('project_products').update({ versiyon: versiyon || null })
+      .eq('project_id', projectId).eq('product_id', productId), 'Güncellendi')
+  }
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: 14 }}>
+        <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: 0 }}>
+          Her projenin ürün durumunu buradan toplu girebilirsiniz. Yalnızca projede etiketli ürünler düzenlenebilir;
+          etiketli olmayan ürün "— yok" görünür. Aynı durumu proje detay sayfasından da güncelleyebilirsiniz.
+        </p>
+      </div>
+      <div className="filters">
+        <button className={'filter-chip' + (!hubFilter ? ' active' : '')} onClick={() => setHubFilter('')}>Tümü</button>
+        {d.hubs.map(h => (
+          <button key={h.id} className={'filter-chip' + (hubFilter === h.id ? ' active' : '')} onClick={() => setHubFilter(h.id)}>{h.ad}</button>
+        ))}
+      </div>
+      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+        <table>
+          <thead>
+            <tr><th style={{ minWidth: 200 }}>Proje</th>{urunler.map(u => <th key={u.id}>{u.ad}</th>)}</tr>
+          </thead>
+          <tbody>
+            {projeler.map(p => {
+              const ppList = d.pp.filter(x => x.project_id === p.id)
+              return (
+                <tr key={p.id}>
+                  <td>
+                    <strong>{p.ad}</strong>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{p.customers.ad}</div>
+                  </td>
+                  {urunler.map(u => {
+                    const pp = ppList.find(x => x.product_id === u.id)
+                    if (!pp) return <td key={u.id}><span style={{ color: 'var(--ink-3)', fontSize: 12 }}>— yok</span></td>
+                    const renk = pp.durum ? URUN_DURUM_RENK[pp.durum] : { bg: '#fff', fg: 'var(--ink-3)' }
+                    return (
+                      <td key={u.id}>
+                        <select value={pp.durum || ''} onChange={e => durumGuncelle(p.id, u.id, e.target.value)}
+                          style={{ width: 'auto', background: renk.bg, color: renk.fg, fontSize: 12.5, padding: '4px 8px' }}>
+                          <option value="">Belirlenmedi</option>
+                          {Object.entries(URUN_DURUMLARI).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                        <input defaultValue={pp.versiyon || ''} placeholder="Versiyon"
+                          onBlur={e => e.target.value !== (pp.versiyon || '') && versiyonGuncelle(p.id, u.id, e.target.value)}
+                          style={{ width: '100%', fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace", padding: '3px 8px', marginTop: 4 }} />
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

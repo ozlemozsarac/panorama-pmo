@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase, DURUMLAR, fmtTarih } from '../lib/supabase'
+import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 const BOS_KALEM = {
-  baslik: '', durum: 'acik', sorumlu_id: '', termin: '', is_tipi_id: '',
-  blokaj: false, blokaj_nedeni: '', kritik: false, beklemede_nedeni_id: '', notlar: ''
+  baslik: '', durum: 'acik', sorumlu_id: '', baslangic_tarihi: '', bitis_tarihi: '',
+  is_tipi_id: '', product_id: '', blokaj: false, blokaj_nedeni: '', kritik: false,
+  beklemede_nedeni_id: '', notlar: ''
 }
 
 export default function ProjeDetay() {
@@ -14,37 +15,60 @@ export default function ProjeDetay() {
   const [proje, setProje] = useState(null)
   const [tasks, setTasks] = useState([])
   const [ekip, setEkip] = useState([])
+  const [urunler, setUrunler] = useState([])       // projedeki ürünler (durumlu)
   const [isTipleri, setIsTipleri] = useState([])
   const [nedenler, setNedenler] = useState([])
+  const [eforlar, setEforlar] = useState([])       // bu projedeki tüm efor kayıtları
   const [filtre, setFiltre] = useState('acik-tumu')
-  const [modal, setModal] = useState(null) // null | {…kalem}
+  const [modal, setModal] = useState(null)
+  const [eforModal, setEforModal] = useState(null) // { task, hafta }
   const [err, setErr] = useState('')
 
   useEffect(() => { yukle() }, [id])
 
   async function yukle() {
-    const [{ data: p }, { data: t }, { data: wt }, { data: wr }] = await Promise.all([
-      supabase.from('projects').select('id, ad, customers ( ad, hubs ( ad, renk ) ), project_assignments ( proje_lideri, profiles ( id, ad ) )').eq('id', id).single(),
-      supabase.from('tasks').select('*, profiles!tasks_sorumlu_id_fkey ( ad ), work_types ( ad ), waiting_reasons ( ad )').eq('project_id', id).order('olusturma', { ascending: false }),
+    const [{ data: p }, { data: t }, { data: wt }, { data: wr }, { data: pp }, { data: ef }] = await Promise.all([
+      supabase.from('projects').select('id, ad, klasor_linki, customers ( ad, hub_id, hubs ( ad, renk ) ), project_assignments ( proje_lideri, profiles ( id, ad ) )').eq('id', id).single(),
+      supabase.from('tasks').select('*, profiles!tasks_sorumlu_id_fkey ( ad ), work_types ( ad ), waiting_reasons ( ad ), products ( ad )').eq('project_id', id).order('olusturma', { ascending: false }),
       supabase.from('work_types').select('*').order('sira'),
-      supabase.from('waiting_reasons').select('*').order('sira')
+      supabase.from('waiting_reasons').select('*').order('sira'),
+      supabase.from('project_products').select('*, products ( id, ad )').eq('project_id', id),
+      supabase.from('effort_entries').select('*').eq('project_id', id)
     ])
     setProje(p)
     setTasks(t || [])
     setEkip(p?.project_assignments?.map(a => a.profiles).filter(Boolean) || [])
     setIsTipleri(wt || [])
     setNedenler(wr || [])
+    setUrunler(pp || [])
+    setEforlar(ef || [])
+  }
+
+  async function urunDurumGuncelle(ppRow, durum) {
+    await supabase.from('project_products').update({ durum }).eq('project_id', id).eq('product_id', ppRow.product_id)
+    yukle()
+  }
+
+  async function urunVersiyonGuncelle(ppRow, versiyon) {
+    await supabase.from('project_products').update({ versiyon: versiyon || null }).eq('project_id', id).eq('product_id', ppRow.product_id)
+    yukle()
+  }
+
+  async function klasorGuncelle(link) {
+    await supabase.from('projects').update({ klasor_linki: link || null }).eq('id', id)
+    yukle()
   }
 
   async function kaydet(e) {
     e.preventDefault()
     setErr('')
     const k = { ...modal, project_id: id }
-    ;['sorumlu_id', 'is_tipi_id', 'beklemede_nedeni_id', 'termin'].forEach(f => { if (!k[f]) k[f] = null })
+    ;['sorumlu_id', 'is_tipi_id', 'beklemede_nedeni_id', 'baslangic_tarihi', 'bitis_tarihi', 'product_id'].forEach(f => { if (!k[f]) k[f] = null })
     if (k.durum !== 'beklemede') k.beklemede_nedeni_id = null
     if (!k.blokaj) k.blokaj_nedeni = null
-    delete k.profiles; delete k.work_types; delete k.waiting_reasons
-    delete k.olusturma; delete k.tamamlanma; delete k.olusturan_id
+    // proje tek ürünlüyse ürünü otomatik ata
+    if (!k.product_id && urunler.length === 1) k.product_id = urunler[0].product_id
+    ;['profiles', 'work_types', 'waiting_reasons', 'products', 'olusturma', 'tamamlanma', 'olusturan_id'].forEach(f => delete k[f])
 
     const isNew = !k.id
     if (isNew) delete k.id
@@ -59,6 +83,30 @@ export default function ProjeDetay() {
   async function hizliDurum(t, durum) {
     await supabase.from('tasks').update({ durum }).eq('id', t.id)
     yukle()
+  }
+
+  // Bir iş kalemine haftalık efor ekle/güncelle
+  async function eforKaydet(task, haftaStr, saat) {
+    const v = parseFloat(String(saat).replace(',', '.'))
+    const mevcut = eforlar.find(e => e.task_id === task.id && e.hafta_baslangici === haftaStr)
+    let error = null
+    if (!v || v <= 0) {
+      if (mevcut) ({ error } = await supabase.from('effort_entries').delete().eq('id', mevcut.id))
+    } else if (mevcut) {
+      ({ error } = await supabase.from('effort_entries').update({ saat: v }).eq('id', mevcut.id))
+    } else {
+      ({ error } = await supabase.from('effort_entries').insert({
+        user_id: profile.id, project_id: id, task_id: task.id,
+        hafta_baslangici: haftaStr, saat: v, product_id: task.product_id
+      }))
+    }
+    if (error) { setErr('Efor kaydedilemedi: ' + error.message); return }
+    setEforModal(null)
+    yukle()
+  }
+
+  function taskEfor(taskId) {
+    return eforlar.filter(e => e.task_id === taskId).reduce((s, e) => s + Number(e.saat), 0)
   }
 
   if (!proje) return <p>Yükleniyor…</p>
@@ -83,9 +131,33 @@ export default function ProjeDetay() {
             <span className="hub-dot" style={{ background: proje.customers.hubs.renk }} /> {proje.customers.hubs.ad}
             {ekip.length > 0 && <> · Ekip: {ekip.map(e => e.ad).join(', ')}</>}
           </p>
+          <KlasorLink link={proje.klasor_linki} onSave={klasorGuncelle} />
         </div>
         <button className="btn" onClick={() => setModal({ ...BOS_KALEM, sorumlu_id: profile.id })}>+ İş kalemi</button>
       </div>
+
+      {/* ÜRÜN DURUMLARI ŞERİDİ */}
+      {urunler.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 10 }}>Ürün durumları</div>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            {urunler.map(pp => {
+              const renk = pp.durum ? URUN_DURUM_RENK[pp.durum] : { bg: '#fff', fg: 'var(--ink-3)' }
+              return (
+                <div key={pp.product_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontWeight: 500, minWidth: 64 }}>{pp.products.ad}</span>
+                  <select value={pp.durum || ''} onChange={e => urunDurumGuncelle(pp, e.target.value)}
+                    style={{ width: 'auto', background: renk.bg, color: renk.fg, fontSize: 13, padding: '5px 12px' }}>
+                    <option value="">Belirlenmedi</option>
+                    {Object.entries(URUN_DURUMLARI).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <VersiyonKutu deger={pp.versiyon} onSave={v => urunVersiyonGuncelle(pp, v)} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="filters">
         {[
@@ -110,38 +182,49 @@ export default function ProjeDetay() {
           <table>
             <thead>
               <tr>
-                <th style={{ width: '38%' }}>İş</th>
+                <th style={{ width: '32%' }}>İş</th>
+                <th>Ürün</th>
                 <th>Sorumlu</th>
                 <th>Durum</th>
-                <th>Termin</th>
-                <th>İşaretler</th>
+                <th>Tarih</th>
+                <th>Efor</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {gorunen.map(t => {
-                const gecikti = t.termin && t.durum !== 'tamamlandi' && new Date(t.termin) < new Date()
+                const gecikti = t.bitis_tarihi && t.durum !== 'tamamlandi' && new Date(t.bitis_tarihi) < new Date()
+                const saat = taskEfor(t.id)
                 return (
                   <tr key={t.id} className="clickable" onClick={() => setModal({
                     ...t,
-                    sorumlu_id: t.sorumlu_id || '', termin: t.termin || '',
-                    is_tipi_id: t.is_tipi_id || '', beklemede_nedeni_id: t.beklemede_nedeni_id || '',
+                    sorumlu_id: t.sorumlu_id || '', baslangic_tarihi: t.baslangic_tarihi || '', bitis_tarihi: t.bitis_tarihi || '',
+                    is_tipi_id: t.is_tipi_id || '', beklemede_nedeni_id: t.beklemede_nedeni_id || '', product_id: t.product_id || '',
                     blokaj_nedeni: t.blokaj_nedeni || '', notlar: t.notlar || ''
                   })}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{t.baslik}</div>
                       {t.work_types && <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.work_types.ad}</div>}
                     </td>
+                    <td>{t.products ? <span className="chip">{t.products.ad}</span> : '—'}</td>
                     <td>{t.profiles?.ad || '—'}</td>
                     <td>
                       <span className={'chip' + (t.durum === 'tamamlandi' ? ' ok' : '')}>{DURUMLAR[t.durum]}</span>
                       {t.durum === 'beklemede' && t.waiting_reasons &&
                         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2 }}>{t.waiting_reasons.ad}</div>}
                     </td>
-                    <td style={gecikti ? { color: 'var(--danger)', fontWeight: 500 } : {}}>{fmtTarih(t.termin)}</td>
-                    <td>
-                      {t.blokaj && <span className="chip danger" title={t.blokaj_nedeni || ''}>Blokaj</span>}{' '}
-                      {t.kritik && <span className="chip warn">Kritik</span>}
+                    <td style={gecikti ? { color: 'var(--danger)', fontWeight: 500 } : {}}>
+                      {t.baslangic_tarihi ? fmtTarih(t.baslangic_tarihi) : '—'}
+                      {t.bitis_tarihi && <> → {fmtTarih(t.bitis_tarihi)}</>}
+                      <div style={{ marginTop: 3 }}>
+                        {t.blokaj && <span className="chip danger" title={t.blokaj_nedeni || ''}>Blokaj</span>}{' '}
+                        {t.kritik && <span className="chip warn">Kritik</span>}
+                      </div>
+                    </td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <button className="btn ghost sm" onClick={() => setEforModal({ task: t, hafta: isoDate(haftaBasi()) })}>
+                        {saat > 0 ? saat + ' saat' : 'Efor ekle'}
+                      </button>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
                       {t.durum !== 'tamamlandi' &&
@@ -155,6 +238,7 @@ export default function ProjeDetay() {
         </div>
       )}
 
+      {/* İŞ KALEMİ MODAL */}
       {modal && (
         <div className="modal-bg" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -180,17 +264,30 @@ export default function ProjeDetay() {
                   </select>
                 </div>
               </div>
-              <div className="row">
+              {urunler.length > 1 && (
                 <div className="field">
-                  <label>Durum</label>
-                  <select value={modal.durum} onChange={e => setModal({ ...modal, durum: e.target.value })}>
-                    {Object.entries(DURUMLAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  <label>Ürün</label>
+                  <select value={modal.product_id} onChange={e => setModal({ ...modal, product_id: e.target.value })}>
+                    <option value="">Seçin…</option>
+                    {urunler.map(pp => <option key={pp.product_id} value={pp.product_id}>{pp.products.ad}</option>)}
                   </select>
                 </div>
+              )}
+              <div className="row">
                 <div className="field">
-                  <label>Termin</label>
-                  <input type="date" value={modal.termin} onChange={e => setModal({ ...modal, termin: e.target.value })} />
+                  <label>Başlangıç tarihi</label>
+                  <input type="date" value={modal.baslangic_tarihi} onChange={e => setModal({ ...modal, baslangic_tarihi: e.target.value })} />
                 </div>
+                <div className="field">
+                  <label>Bitiş tarihi</label>
+                  <input type="date" value={modal.bitis_tarihi} onChange={e => setModal({ ...modal, bitis_tarihi: e.target.value })} />
+                </div>
+              </div>
+              <div className="field">
+                <label>Durum</label>
+                <select value={modal.durum} onChange={e => setModal({ ...modal, durum: e.target.value })}>
+                  {Object.entries(DURUMLAR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
               </div>
               {modal.durum === 'beklemede' && (
                 <div className="field">
@@ -235,6 +332,102 @@ export default function ProjeDetay() {
           </div>
         </div>
       )}
+
+      {/* EFOR EKLE MODAL */}
+      {eforModal && (
+        <div className="modal-bg" onClick={() => setEforModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <h2>Efor ekle</h2>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-2)', marginTop: -8 }}>
+              <strong>{eforModal.task.baslik}</strong> · saat cinsinden, seçili haftaya
+            </p>
+            <EforForm task={eforModal.task} eforlar={eforlar} onSave={eforKaydet} onCancel={() => setEforModal(null)} />
+            {err && <div className="msg err">{err}</div>}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// Proje klasörü linki: göster + düzenle (PM dahil)
+function KlasorLink({ link, onSave }) {
+  const [d, setD] = useState(false)
+  const [v, setV] = useState(link || '')
+  if (d) return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+      <input value={v} onChange={e => setV(e.target.value)} placeholder="https://drive.google.com/..." autoFocus style={{ maxWidth: 380 }} />
+      <button className="btn sm" onClick={() => { onSave(v); setD(false) }}>Kaydet</button>
+      <button className="btn ghost sm" onClick={() => { setV(link || ''); setD(false) }}>İptal</button>
+    </div>
+  )
+  return (
+    <div style={{ marginTop: 6, fontSize: 13.5 }}>
+      {link
+        ? <>📁 <a href={link} target="_blank" rel="noreferrer">Proje dokümanları</a> <button className="btn ghost sm" onClick={() => setD(true)}>Değiştir</button></>
+        : <button className="btn ghost sm" onClick={() => setD(true)}>+ Proje klasörü linki ekle</button>}
+    </div>
+  )
+}
+
+// Ürün versiyon kutusu: satır içi, onBlur ile kaydeder
+function VersiyonKutu({ deger, onSave }) {
+  const [v, setV] = useState(deger || '')
+  return (
+    <input value={v} onChange={e => setV(e.target.value)}
+      onBlur={() => v !== (deger || '') && onSave(v)}
+      placeholder="Versiyon"
+      style={{ width: 130, fontSize: 12.5, fontFamily: "'IBM Plex Mono', monospace", padding: '5px 10px' }} />
+  )
+}
+
+// İş kalemine haftalık efor girişi (birden çok hafta yönetilebilir)
+function EforForm({ task, eforlar, onSave, onCancel }) {
+  const [hafta, setHafta] = useState(isoDate(haftaBasi()))
+  const [saat, setSaat] = useState('')
+
+  const mevcutlar = eforlar.filter(e => e.task_id === task.id).sort((a, b) => a.hafta_baslangici.localeCompare(b.hafta_baslangici))
+
+  function haftaKaydir(n) {
+    const d = new Date(hafta); d.setDate(d.getDate() + 7 * n); setHafta(isoDate(haftaBasi(d)))
+  }
+  const mevcutSaat = eforlar.find(e => e.task_id === task.id && e.hafta_baslangici === hafta)?.saat
+
+  const hs = new Date(hafta); const he = new Date(hafta); he.setDate(he.getDate() + 6)
+
+  return (
+    <>
+      {mevcutlar.length > 0 && (
+        <div style={{ marginBottom: 14, fontSize: 13 }}>
+          <div style={{ color: 'var(--ink-3)', marginBottom: 4 }}>Girilmiş haftalar:</div>
+          {mevcutlar.map(e => (
+            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+              <span>{fmtTarih(e.hafta_baslangici)} haftası</span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{Number(e.saat)} saat</span>
+            </div>
+          ))}
+          <div style={{ borderTop: '1px solid var(--line)', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontWeight: 500 }}>
+            <span>Toplam</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{mevcutlar.reduce((s, e) => s + Number(e.saat), 0)} saat</span>
+          </div>
+        </div>
+      )}
+      <div className="field">
+        <label>Hafta</label>
+        <div className="week-nav" style={{ justifyContent: 'space-between' }}>
+          <button type="button" className="btn ghost sm" onClick={() => haftaKaydir(-1)}>←</button>
+          <span style={{ fontSize: 13 }}>{fmtTarih(isoDate(hs))} – {fmtTarih(isoDate(he))}</span>
+          <button type="button" className="btn ghost sm" onClick={() => haftaKaydir(1)}>→</button>
+        </div>
+      </div>
+      <div className="field">
+        <label>Saat {mevcutSaat != null && <span style={{ color: 'var(--ink-3)' }}>(mevcut: {Number(mevcutSaat)})</span>}</label>
+        <input inputMode="decimal" placeholder="0" value={saat} onChange={e => setSaat(e.target.value)} autoFocus />
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="btn ghost" onClick={onCancel}>Kapat</button>
+        <button type="button" className="btn" onClick={() => onSave(task, hafta, saat)}>Kaydet</button>
+      </div>
     </>
   )
 }
