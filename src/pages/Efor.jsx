@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 export default function Efor() {
   const { profile, seesAll, isHubYon } = useAuth()
   const [donem, setDonem] = useState('hafta') // hafta | ay | yil
+  const [ref, setRef] = useState(new Date())  // seçili dönemi işaret eden referans tarih
   const [efor, setEfor] = useState([])
   const [tasks, setTasks] = useState([])
   const [kisiler, setKisiler] = useState([])
@@ -35,13 +36,39 @@ export default function Efor() {
     setYukleniyor(false)
   }
 
-  // Dönem filtresi: seçili döneme giren efor kayıtları
-  const donemBaslangic = useMemo(() => {
-    const now = new Date()
-    if (donem === 'hafta') return haftaBasi(now)
-    if (donem === 'ay') return new Date(now.getFullYear(), now.getMonth(), 1)
-    return new Date(now.getFullYear(), 0, 1) // yıl
-  }, [donem])
+  // Dönem aralığı: referans tarihe göre başlangıç ve bitiş
+  const [donemBaslangic, donemBitis, donemEtiket] = useMemo(() => {
+    if (donem === 'hafta') {
+      const bas = haftaBasi(ref)
+      const bit = new Date(bas); bit.setDate(bit.getDate() + 6)
+      const et = `${bas.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })} – ${bit.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+      return [bas, bit, et]
+    }
+    if (donem === 'ay') {
+      const bas = new Date(ref.getFullYear(), ref.getMonth(), 1)
+      const bit = new Date(ref.getFullYear(), ref.getMonth() + 1, 0)
+      return [bas, bit, bas.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })]
+    }
+    const bas = new Date(ref.getFullYear(), 0, 1)
+    const bit = new Date(ref.getFullYear(), 11, 31)
+    return [bas, bit, String(ref.getFullYear())]
+  }, [donem, ref])
+
+  // Sadece geçmiş + bugün: ileri gitmek bugünün dönemini aşamaz
+  const bugunRef = new Date()
+  const ileriMumkun = useMemo(() => {
+    if (donem === 'hafta') return isoDate(haftaBasi(ref)) < isoDate(haftaBasi(bugunRef))
+    if (donem === 'ay') return ref.getFullYear() < bugunRef.getFullYear() || (ref.getFullYear() === bugunRef.getFullYear() && ref.getMonth() < bugunRef.getMonth())
+    return ref.getFullYear() < bugunRef.getFullYear()
+  }, [donem, ref])
+
+  function kaydir(yon) {
+    const d = new Date(ref)
+    if (donem === 'hafta') d.setDate(d.getDate() + 7 * yon)
+    else if (donem === 'ay') d.setMonth(d.getMonth() + yon)
+    else d.setFullYear(d.getFullYear() + yon)
+    setRef(d)
+  }
 
   // Bu kullanıcının görebileceği kişi kapsamı
   const gorunenKisiler = useMemo(() => {
@@ -52,16 +79,17 @@ export default function Efor() {
 
   const gorunenKisiIds = new Set(gorunenKisiler.map(k => k.id))
 
-  // Filtrelenmiş efor: dönem + kişi kapsamı + (opsiyonel) seçili kişi
+  // Filtrelenmiş efor: dönem aralığı + kişi kapsamı + (opsiyonel) seçili kişi
   const filtreliEfor = useMemo(() => {
     const bas = isoDate(donemBaslangic)
+    const bit = isoDate(donemBitis)
     return efor.filter(e => {
-      if (e.hafta_baslangici < bas) return false
+      if (e.hafta_baslangici < bas || e.hafta_baslangici > bit) return false
       if (!gorunenKisiIds.has(e.user_id)) return false
       if (seciliKisi && e.user_id !== seciliKisi) return false
       return true
     })
-  }, [efor, donemBaslangic, gorunenKisiIds, seciliKisi])
+  }, [efor, donemBaslangic, donemBitis, gorunenKisiIds, seciliKisi])
 
   const toplamSaat = filtreliEfor.reduce((s, e) => s + Number(e.saat), 0)
 
@@ -89,7 +117,7 @@ export default function Efor() {
   const blokajSayi = ilgiliTasks.filter(t => t.blokaj).length
   const kritikSayi = ilgiliTasks.filter(t => t.kritik).length
 
-  const donemAdi = { hafta: 'Bu hafta', ay: 'Bu ay', yil: 'Bu yıl' }[donem]
+  const donemAdi = donemEtiket
 
   if (yukleniyor) return <p>Yükleniyor…</p>
 
@@ -102,14 +130,20 @@ export default function Efor() {
         </div>
       </div>
 
-      <div className="filters" style={{ justifyContent: 'space-between' }}>
+      <div className="filters" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 6 }}>
           {[['hafta', 'Haftalık'], ['ay', 'Aylık'], ['yil', 'Yıllık']].map(([v, l]) => (
-            <button key={v} className={'filter-chip' + (donem === v ? ' active' : '')} onClick={() => setDonem(v)}>{l}</button>
+            <button key={v} className={'filter-chip' + (donem === v ? ' active' : '')} onClick={() => { setDonem(v); setRef(new Date()) }}>{l}</button>
           ))}
         </div>
+        <div className="week-nav">
+          <button className="btn ghost sm" onClick={() => kaydir(-1)}>←</button>
+          <span className="label" style={{ minWidth: 170 }}>{donemEtiket}</span>
+          <button className="btn ghost sm" onClick={() => kaydir(1)} disabled={!ileriMumkun}>→</button>
+          {ileriMumkun && <button className="btn ghost sm" onClick={() => setRef(new Date())}>Bugüne dön</button>}
+        </div>
         {(seesAll || isHubYon) && (
-          <select value={seciliKisi} onChange={e => setSeciliKisi(e.target.value)} style={{ maxWidth: 220 }}>
+          <select value={seciliKisi} onChange={e => setSeciliKisi(e.target.value)} style={{ maxWidth: 200 }}>
             <option value="">Tüm kişiler</option>
             {gorunenKisiler.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
           </select>

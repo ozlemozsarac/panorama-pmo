@@ -8,6 +8,7 @@ import Efor from './pages/Efor'
 import Izin from './pages/Izin'
 import GmOzeti from './pages/GmOzeti'
 import EkipSemasi from './pages/EkipSemasi'
+import AtamaRaporu from './pages/AtamaRaporu'
 import Admin from './pages/Admin'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/efor" element={<Efor />} />
         <Route path="/izin" element={<Izin />} />
         <Route path="/ekip" element={<EkipSemasi />} />
+        {(seesAll || profile.yetki_rolu === 'hub_yon') && <Route path="/atama-raporu" element={<AtamaRaporu />} />}
         {seesAll && <Route path="/ozet" element={<GmOzeti />} />}
         {isAdmin && <Route path="/admin" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />

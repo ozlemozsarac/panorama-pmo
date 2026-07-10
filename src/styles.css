@@ -148,3 +148,19 @@ tr.clickable:hover td { background: #f7fafc; cursor: pointer; }
   .sidebar-footer { margin: 0 0 0 auto; border: none; padding: 0 10px; }
   .main { padding: 18px 14px; }
 }
+
+/* PDF yazdırma (Atama Raporu vb.) */
+@media print {
+  .sidebar, .no-print, .btn, .filter-chip { display: none !important; }
+  .main { padding: 0; max-width: none; }
+  .layout { display: block; }
+  .print-title { display: block !important; margin-bottom: 16px; }
+  .print-title h1 { font-size: 18px; }
+  .print-title p { color: #555; font-size: 13px; }
+  .card { border: 1px solid #ccc; box-shadow: none; }
+  table { font-size: 11px; }
+  th, td { padding: 5px 7px; }
+  .no-print-link { color: #000; text-decoration: none; }
+  a { color: #000; }
+  @page { margin: 1.5cm; }
+}

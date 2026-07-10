@@ -25,6 +25,7 @@ export default function Layout({ children }) {
         {item('/efor', 'Efor Özet')}
         {item('/izin', 'İzin')}
         {item('/ekip', 'Ekip şeması')}
+        {(seesAll || profile.yetki_rolu === 'hub_yon') && item('/atama-raporu', 'Atama raporu')}
         {isAdmin && item('/admin', 'Yönetim')}
         <div className="sidebar-footer">
           <div className="name">{profile.ad || profile.eposta}</div>
