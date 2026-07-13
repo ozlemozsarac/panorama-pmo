@@ -164,3 +164,122 @@ tr.clickable:hover td { background: #f7fafc; cursor: pointer; }
   a { color: #000; }
   @page { margin: 1.5cm; }
 }
+/* =====================================================================
+   TEMA KATMANI  —  Geist + açık/koyu (tüm uygulama)
+   Bu blok styles.css dosyasının EN SONUNA eklenecek.
+   Hiçbir mevcut kuralı silmez; yalnızca ekler ve gerekli yerleri
+   tema değişkenlerine bağlar. Font, Layout.jsx tarafından yüklenir.
+   ===================================================================== */
+
+/* --- Yeni semantik token'lar (açık tema varsayılan) + font değişkenleri --- */
+:root {
+  --font-sans: 'Geist', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'IBM Plex Mono', ui-monospace, monospace;
+
+  --bg: #FAFAF9;
+  --surface: #FFFFFF;
+  --border: #E7E7E4;
+  --text: #17171A;
+  --muted: #71716C;
+  --track: #EFEFEC;
+  --prod-bg: #EEF3FC;
+  --prod-tx: #1D4ED8;
+  --dis-bg: #F2F2EF;
+  --dis-tx: #6B6B64;
+  --detay: #F7F7F5;
+
+  /* sol menü — açık tema */
+  --sidebar-bg: #F4F4F1;
+  --sidebar-text: #45566B;
+  --sidebar-strong: #17171A;
+  --sidebar-active-bg: #EBF1FD;
+  --sidebar-active-tx: #1D5B8F;
+  --sidebar-border: #E7E7E4;
+}
+
+/* Uygulama fontunu Geist yap */
+body { font-family: var(--font-sans); }
+
+/* --- KOYU TEMA: hem eski hem yeni değişkenler --- */
+[data-theme="dark"] {
+  --ink: #F3F3F4;
+  --ink-2: #B4B4BA;
+  --ink-3: #8C8C92;
+  --paper: #0C0C0E;
+  --card: #161619;
+  --line: #28282C;
+  --accent: #3B82F6;
+  --danger: #F26D6D;
+  --danger-bg: #2A1719;
+  --warn: #E0A83B;
+  --warn-bg: #2A2113;
+  --ok: #4ADE80;
+  --ok-bg: #12241A;
+
+  --bg: #0C0C0E;
+  --surface: #161619;
+  --border: #28282C;
+  --text: #F3F3F4;
+  --muted: #8C8C92;
+  --track: #242428;
+  --prod-bg: #17233B;
+  --prod-tx: #8FB6F5;
+  --dis-bg: #242428;
+  --dis-tx: #9A9AA0;
+  --detay: #141417;
+
+  --sidebar-bg: #111113;
+  --sidebar-text: #8C8C92;
+  --sidebar-strong: #F3F3F4;
+  --sidebar-active-bg: #182338;
+  --sidebar-active-tx: #8FB6F5;
+  --sidebar-border: #28282C;
+}
+[data-theme="dark"] body { background: var(--paper); color: var(--ink); }
+
+/* --- SOL MENÜ: sabit lacivert yerine tema değişkenleri (açık/koyu) --- */
+.sidebar {
+  background: var(--sidebar-bg) !important;
+  color: var(--sidebar-text) !important;
+  border-right: 1px solid var(--sidebar-border);
+}
+.sidebar .logo { color: var(--sidebar-strong) !important; }
+.sidebar .nav-item { color: var(--sidebar-text) !important; }
+.sidebar .nav-item:hover,
+.sidebar .nav-item.active {
+  background: var(--sidebar-active-bg) !important;
+  color: var(--sidebar-active-tx) !important;
+}
+.sidebar .sidebar-footer { border-top: 1px solid var(--sidebar-border); }
+.sidebar .sidebar-footer .name { color: var(--sidebar-strong) !important; }
+.sidebar .sidebar-footer .role { color: var(--sidebar-text) !important; }
+.sidebar .sidebar-footer button {
+  color: var(--sidebar-text) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  background: transparent !important;
+}
+
+/* --- Tema düğmesi (sol menü altı) --- */
+.theme-toggle {
+  display: block;
+  margin: 0 16px 10px;
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid var(--sidebar-border);
+  color: var(--sidebar-text);
+  font: inherit;
+  font-size: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--sidebar-strong); }
+
+/* --- PDF: her zaman açık tema (koyu baskıda okunmaz) --- */
+@media print {
+  [data-theme="dark"] {
+    --ink:#16232f; --ink-2:#45566b; --ink-3:#7d8ba0; --paper:#fff; --card:#fff; --line:#e2e8ee;
+    --accent:#1d5b8f; --danger:#c2402f; --warn:#a06a10; --ok:#1c7a52;
+    --bg:#fff; --surface:#fff; --border:#e7e7e4; --text:#17171a; --muted:#71716c;
+    --track:#efefec; --prod-bg:#eef3fc; --prod-tx:#1d4ed8; --dis-bg:#f2f2ef; --dis-tx:#6b6b64; --detay:#f7f7f5;
+  }
+}
