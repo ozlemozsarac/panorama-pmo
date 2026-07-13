@@ -1,24 +1,10 @@
-import { useEffect, useMemo, useState, Fragment } from 'react'
+import { useMemo, useState, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useEffect } from 'react'
 
 const ASIRI_YUK_ESIK = 4 // bu sayıdan fazla projede olan "aşırı yüklü"
-
-const SANS = "'Geist', ui-sans-serif, system-ui, sans-serif"
-const MONO = "'Geist Mono', ui-monospace, 'SF Mono', monospace"
-
-// TEMA TOKEN'LARI — pilot için bu dosyaya kapsanmış (rollout'ta styles.css'e taşınacak)
-const LIGHT = {
-  bg: '#FAFAF9', surface: '#FFFFFF', border: '#E7E7E4', text: '#17171A', muted: '#71716C',
-  accent: '#2563EB', danger: '#DC2626', warn: '#B45309', track: '#EFEFEC',
-  prodBg: '#EEF3FC', prodTx: '#1D4ED8', disBg: '#F2F2EF', disTx: '#6B6B64', detay: '#F7F7F5'
-}
-const DARK = {
-  bg: '#0C0C0E', surface: '#161619', border: '#28282C', text: '#F3F3F4', muted: '#8C8C92',
-  accent: '#3B82F6', danger: '#F26D6D', warn: '#E0A83B', track: '#242428',
-  prodBg: '#17233B', prodTx: '#8FB6F5', disBg: '#242428', disTx: '#9A9AA0', detay: '#141417'
-}
 
 export default function AtamaRaporu() {
   const { seesAll, isHubYon, profile } = useAuth()
@@ -28,22 +14,7 @@ export default function AtamaRaporu() {
   const [atamalar, setAtamalar] = useState([])
   const [hublar, setHublar] = useState([])
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [acikSatir, setAcikSatir] = useState(null) // kişi ekseninde genişleyen satır
-  const [dark, setDark] = useState(false) // oturum-içi tema (kalıcı değil)
-
-  const t = dark ? DARK : LIGHT
-
-  // Geist fontunu bir kez yükle (dosya kendi kendine — index.html'e dokunmadan)
-  useEffect(() => {
-    const id = 'geist-font-link'
-    if (!document.getElementById(id)) {
-      const l = document.createElement('link')
-      l.id = id
-      l.rel = 'stylesheet'
-      l.href = 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap'
-      document.head.appendChild(l)
-    }
-  }, [])
+  const [acikSatir, setAcikSatir] = useState(null)
 
   useEffect(() => { yukle() }, [])
 
@@ -58,16 +29,6 @@ export default function AtamaRaporu() {
     setProjeler(pr.data || []); setKisiler(ki.data || [])
     setAtamalar(at.data || []); setHublar(hb.data || [])
     setYukleniyor(false)
-  }
-
-  // PDF'i her zaman açık temada al (koyu tema baskıda okunmaz olur)
-  function pdfYazdir() {
-    if (dark) {
-      setDark(false)
-      setTimeout(() => window.print(), 60)
-    } else {
-      window.print()
-    }
   }
 
   const kapsamProjeler = useMemo(() => {
@@ -122,6 +83,8 @@ export default function AtamaRaporu() {
     return Object.entries(tally).sort((a, b) => b[1] - a[1])
   }, [kapsamProjeler])
   const urunMax = urunDagilimi.length ? Math.max(...urunDagilimi.map(x => x[1])) : 0
+  const urunEtiketToplam = urunDagilimi.reduce((s, x) => s + x[1], 0)
+  const projeToplam = kapsamProjeler.length
 
   async function excelExport() {
     const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs')
@@ -151,40 +114,38 @@ export default function AtamaRaporu() {
     XLSX.writeFile(wb, `atama-raporu-${eksen}-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
-  if (yukleniyor) return <p style={{ fontFamily: SANS }}>Yükleniyor…</p>
+  if (yukleniyor) return <p style={{ fontFamily: 'var(--font-sans)' }}>Yükleniyor…</p>
 
-  const kartStil = { background: t.surface, border: '1px solid ' + t.border, borderRadius: 12, padding: '16px 17px' }
-  const kpiNumStil = { fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: 32, lineHeight: 1, letterSpacing: '-0.025em' }
-  const lblStil = { fontSize: 12.5, color: t.muted, marginTop: 9 }
-  const monoStil = { fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }
-  const btnStil = { background: 'transparent', border: '1px solid ' + t.border, color: t.text, font: 'inherit', fontSize: 13, padding: '6px 13px', borderRadius: 8, cursor: 'pointer' }
-  const thStil = { textAlign: 'left', fontWeight: 500, color: t.muted, fontSize: 12, padding: '9px 14px', borderBottom: '1px solid ' + t.border }
-  const tdStil = { padding: '11px 14px', borderBottom: '1px solid ' + t.border, fontSize: 13, verticalAlign: 'top' }
+  const kartStil = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 17px' }
+  const kpiNumStil = { fontFamily: 'var(--font-sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: 32, lineHeight: 1, letterSpacing: '-0.025em' }
+  const lblStil = { fontSize: 12.5, color: 'var(--muted)', marginTop: 9 }
+  const monoStil = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }
+  const btnStil = { background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', font: 'inherit', fontSize: 13, padding: '6px 13px', borderRadius: 8, cursor: 'pointer' }
+  const thStil = { textAlign: 'left', fontWeight: 500, color: 'var(--muted)', fontSize: 12, padding: '9px 14px', borderBottom: '1px solid var(--border)' }
+  const tdStil = { padding: '11px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, verticalAlign: 'top' }
 
   const urunRozet = (ad, sayi) => (
-    <span style={{ display: 'inline-block', background: t.prodBg, color: t.prodTx, fontSize: 12, padding: '2px 8px', borderRadius: 6, marginRight: 4, marginBottom: 3 }}>
+    <span style={{ display: 'inline-block', background: 'var(--prod-bg)', color: 'var(--prod-tx)', fontSize: 12, padding: '2px 8px', borderRadius: 6, marginRight: 4, marginBottom: 3 }}>
       {ad}{sayi != null ? ' ' + sayi : ''}
     </span>
   )
   const disRozet = sayi => (
-    <span style={{ display: 'inline-block', background: t.disBg, color: t.disTx, fontSize: 12, padding: '2px 8px', borderRadius: 6, marginRight: 4, marginBottom: 3 }}>
+    <span style={{ display: 'inline-block', background: 'var(--dis-bg)', color: 'var(--dis-tx)', fontSize: 12, padding: '2px 8px', borderRadius: 6, marginRight: 4, marginBottom: 3 }}>
       dış{sayi != null ? ' ' + sayi : ''}
     </span>
   )
 
   return (
-    <div style={{ fontFamily: SANS, background: t.bg, color: t.text, borderRadius: 14, padding: 20, minHeight: '70vh' }}>
+    <div style={{ fontFamily: 'var(--font-sans)', color: 'var(--text)' }}>
 
       <div className="page-head no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 21, fontWeight: 600, letterSpacing: '-0.015em' }}>Atama raporu</div>
-          <div style={{ fontSize: 13, color: t.muted, marginTop: 3 }}>{seesAll ? 'Tüm hub’lar' : 'Hub’ınız'} · kaynak dağılımı ve atama sinyalleri</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>{seesAll ? 'Tüm hub’lar' : 'Hub’ınız'} · kaynak dağılımı ve atama sinyalleri</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button style={{ ...btnStil, fontSize: 12 }} onClick={() => setDark(d => !d)}>{dark ? '☀ Açık' : '☾ Koyu'}</button>
-          <span style={{ width: 1, height: 20, background: t.border }}></span>
           <button style={btnStil} onClick={excelExport}>Excel'e aktar</button>
-          <button style={btnStil} onClick={pdfYazdir}>PDF</button>
+          <button style={btnStil} onClick={() => window.print()}>PDF</button>
         </div>
       </div>
 
@@ -193,39 +154,45 @@ export default function AtamaRaporu() {
         <p>{new Date().toLocaleDateString('tr-TR')}</p>
       </div>
 
-      <div className="no-print" style={{ display: 'inline-flex', gap: 3, background: t.track, padding: 3, borderRadius: 9, marginBottom: 22 }}>
-        <button onClick={() => setEksen('proje')} style={{ ...btnStil, border: 'none', background: eksen === 'proje' ? t.surface : 'transparent', color: eksen === 'proje' ? t.text : t.muted, fontWeight: eksen === 'proje' ? 500 : 400, boxShadow: eksen === 'proje' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' }}>Projeye göre</button>
-        <button onClick={() => setEksen('kisi')} style={{ ...btnStil, border: 'none', background: eksen === 'kisi' ? t.surface : 'transparent', color: eksen === 'kisi' ? t.text : t.muted, fontWeight: eksen === 'kisi' ? 500 : 400, boxShadow: eksen === 'kisi' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' }}>Kişiye göre</button>
+      <div className="no-print" style={{ display: 'inline-flex', gap: 3, background: 'var(--track)', padding: 3, borderRadius: 9, marginBottom: 22 }}>
+        <button onClick={() => setEksen('proje')} style={{ ...btnStil, border: 'none', background: eksen === 'proje' ? 'var(--surface)' : 'transparent', color: eksen === 'proje' ? 'var(--text)' : 'var(--muted)', fontWeight: eksen === 'proje' ? 500 : 400, boxShadow: eksen === 'proje' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' }}>Projeye göre</button>
+        <button onClick={() => setEksen('kisi')} style={{ ...btnStil, border: 'none', background: eksen === 'kisi' ? 'var(--surface)' : 'transparent', color: eksen === 'kisi' ? 'var(--text)' : 'var(--muted)', fontWeight: eksen === 'kisi' ? 500 : 400, boxShadow: eksen === 'kisi' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' }}>Kişiye göre</button>
       </div>
 
       {/* SİNYALLER + ÜRÜN DAĞILIMI */}
       <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
-        <SinyalKart t={t} kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Atanmamış proje" sayi={kimsesizProjeler.length} tip="danger" detay={kimsesizProjeler.map(r => r.proje.ad)} />
-        <SinyalKart t={t} kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Lidersiz proje" sayi={lidersizProjeler.length} tip="warn" detay={lidersizProjeler.map(r => r.proje.ad)} />
-        <SinyalKart t={t} kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Aşırı yüklü kişi" sayi={asiriYuklu.length} tip="warn" detay={asiriYuklu.map(r => `${r.kisi.ad} (${r.projeSayi})`)} />
-        <SinyalKart t={t} kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Boştaki kişi" sayi={bostakiler.length} detay={bostakiler.map(r => r.kisi.ad)} />
-        <SinyalKart t={t} kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Çapraz atama" sayi={caprazAtamalar.length} detay={caprazAtamalar.map(r => r.kisi.ad)} />
+        <SinyalKart kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Atanmamış proje" sayi={kimsesizProjeler.length} tip="danger" detay={kimsesizProjeler.map(r => r.proje.ad)} />
+        <SinyalKart kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Lidersiz proje" sayi={lidersizProjeler.length} tip="warn" detay={lidersizProjeler.map(r => r.proje.ad)} />
+        <SinyalKart kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Aşırı yüklü kişi" sayi={asiriYuklu.length} tip="warn" detay={asiriYuklu.map(r => `${r.kisi.ad} (${r.projeSayi})`)} />
+        <SinyalKart kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Boştaki kişi" sayi={bostakiler.length} detay={bostakiler.map(r => r.kisi.ad)} />
+        <SinyalKart kartStil={kartStil} kpiNumStil={kpiNumStil} lblStil={lblStil} baslik="Çapraz atama" sayi={caprazAtamalar.length} detay={caprazAtamalar.map(r => r.kisi.ad)} />
         <div style={kartStil}>
-          <div style={{ fontSize: 12.5, color: t.muted, marginBottom: 11 }}>Ürün dağılımı</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 11 }}>Ürün dağılımı</div>
           {urunDagilimi.length === 0
-            ? <div style={{ fontSize: 12.5, color: t.muted }}>ürün bilgisi yok</div>
-            : <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {urunDagilimi.map(([ad, sayi]) => (
-                  <div key={ad} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <div style={{ width: 60, fontSize: 12, color: t.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ad}</div>
-                    <div style={{ flex: 1, background: t.track, borderRadius: 3, height: 7, overflow: 'hidden' }}>
-                      <div style={{ width: (urunMax ? Math.round(sayi / urunMax * 100) : 0) + '%', height: '100%', background: t.accent }} />
+            ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>ürün bilgisi yok</div>
+            : <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {urunDagilimi.map(([ad, sayi]) => (
+                    <div key={ad} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                      <div style={{ width: 60, fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ad}</div>
+                      <div style={{ flex: 1, background: 'var(--track)', borderRadius: 3, height: 7, overflow: 'hidden' }}>
+                        <div style={{ width: (urunMax ? Math.round(sayi / urunMax * 100) : 0) + '%', height: '100%', background: 'var(--accent)' }} />
+                      </div>
+                      <div style={{ ...monoStil, width: 26, fontSize: 12.5, textAlign: 'right' }}>{sayi}</div>
                     </div>
-                    <div style={{ ...monoStil, width: 26, fontSize: 12.5, textAlign: 'right' }}>{sayi}</div>
-                  </div>
-                ))}
-              </div>}
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 500 }}>Toplam</div>
+                  <div style={{ ...monoStil, fontSize: 12.5, fontWeight: 500 }}>{projeToplam} proje · {urunEtiketToplam} etiket</div>
+                </div>
+              </>}
         </div>
       </div>
 
       {/* ANA TABLO */}
       {eksen === 'proje' ? (
-        <div style={{ background: t.surface, border: '1px solid ' + t.border, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
               <th style={thStil}>Proje</th><th style={thStil}>Müşteri</th><th style={thStil}>Hub</th>
@@ -235,13 +202,13 @@ export default function AtamaRaporu() {
             <tbody>
               {projeSatir.map(r => (
                 <tr key={r.proje.id}>
-                  <td style={tdStil}><Link to={'/projeler/' + r.proje.id} className="no-print-link" style={{ color: t.accent, textDecoration: 'none' }}>{r.proje.ad}</Link></td>
+                  <td style={tdStil}><Link to={'/projeler/' + r.proje.id} className="no-print-link" style={{ color: 'var(--accent)', textDecoration: 'none' }}>{r.proje.ad}</Link></td>
                   <td style={tdStil}>{r.proje.customers.ad}</td>
-                  <td style={{ ...tdStil, color: t.muted }}>{r.proje.customers.hubs.ad}</td>
-                  <td style={tdStil}>{r.urunler.length === 0 ? <span style={{ color: t.muted }}>—</span> : r.urunler.map((u, i) => <Fragment key={i}>{urunRozet(u)}</Fragment>)}</td>
-                  <td style={tdStil}>{r.liderAd || <span style={{ color: t.warn }}>—</span>}</td>
+                  <td style={{ ...tdStil, color: 'var(--muted)' }}>{r.proje.customers.hubs.ad}</td>
+                  <td style={tdStil}>{r.urunler.length === 0 ? <span style={{ color: 'var(--muted)' }}>—</span> : r.urunler.map((u, i) => <Fragment key={i}>{urunRozet(u)}</Fragment>)}</td>
+                  <td style={tdStil}>{r.liderAd || <span style={{ color: 'var(--warn)' }}>—</span>}</td>
                   <td style={tdStil}>{r.kisiler.length === 0
-                    ? <span style={{ color: t.danger }}>kimse atanmadı</span>
+                    ? <span style={{ color: 'var(--danger)' }}>kimse atanmadı</span>
                     : r.kisiler.map((k, i) => <span key={i}>{k.ad}{k.lider ? ' ★' : ''}{i < r.kisiler.length - 1 ? ', ' : ''}</span>)}</td>
                   <td style={{ ...tdStil, ...monoStil, textAlign: 'right' }}>{r.kisiSayi}</td>
                 </tr>
@@ -250,7 +217,7 @@ export default function AtamaRaporu() {
           </table>
         </div>
       ) : (
-        <div style={{ background: t.surface, border: '1px solid ' + t.border, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
               <th style={thStil}>Kişi</th><th style={thStil}>Kadro hub</th><th style={thStil}>Ürün dağılımı</th>
@@ -264,15 +231,15 @@ export default function AtamaRaporu() {
                   <Fragment key={r.kisi.id}>
                     <tr style={{ cursor: r.projeSayi ? 'pointer' : 'default' }} onClick={() => r.projeSayi && setAcikSatir(acik ? null : r.kisi.id)}>
                       <td style={tdStil}><strong>{r.kisi.ad}</strong></td>
-                      <td style={{ ...tdStil, color: t.muted }}>{r.kisi.hubs?.ad || '—'}</td>
+                      <td style={{ ...tdStil, color: 'var(--muted)' }}>{r.kisi.hubs?.ad || '—'}</td>
                       <td style={tdStil}>{r.projeSayi === 0
-                        ? <span style={{ color: t.muted }}>atama yok</span>
+                        ? <span style={{ color: 'var(--muted)' }}>atama yok</span>
                         : <>{urunGirdileri.map(([u, s]) => <Fragment key={u}>{urunRozet(u, s)}</Fragment>)}{r.disSayi > 0 && disRozet(r.disSayi)}</>}</td>
                       <td style={{ ...tdStil, ...monoStil, textAlign: 'right' }}>{r.projeSayi}</td>
                     </tr>
                     {acik && (
                       <tr>
-                        <td colSpan={4} style={{ background: t.detay, fontSize: 12.5, color: t.muted, padding: '8px 14px', borderBottom: '1px solid ' + t.border }}>
+                        <td colSpan={4} style={{ background: 'var(--detay)', fontSize: 12.5, color: 'var(--muted)', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
                           {r.projeler.map((p, i) => (
                             <span key={i}>{p.ad}{p.lider ? ' ★' : ''}{p.disHub ? ' [dış]' : ''}{i < r.projeler.length - 1 ? ', ' : ''}</span>
                           ))}
@@ -290,15 +257,15 @@ export default function AtamaRaporu() {
   )
 }
 
-function SinyalKart({ t, kartStil, kpiNumStil, lblStil, baslik, sayi, detay, tip }) {
+function SinyalKart({ kartStil, kpiNumStil, lblStil, baslik, sayi, detay, tip }) {
   const [acik, setAcik] = useState(false)
-  const renk = tip === 'danger' && sayi > 0 ? t.danger : tip === 'warn' && sayi > 0 ? t.warn : t.text
+  const renk = tip === 'danger' && sayi > 0 ? 'var(--danger)' : tip === 'warn' && sayi > 0 ? 'var(--warn)' : 'var(--text)'
   return (
     <div style={{ ...kartStil, cursor: detay.length ? 'pointer' : 'default' }} onClick={() => detay.length && setAcik(!acik)}>
       <div style={{ ...kpiNumStil, color: renk }}>{sayi}</div>
       <div style={lblStil}>{baslik}</div>
       {acik && detay.length > 0 && (
-        <div style={{ marginTop: 10, fontSize: 12.5, color: t.muted, borderTop: '1px solid ' + t.border, paddingTop: 8 }}>
+        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
           {detay.map((d, i) => <div key={i} style={{ marginBottom: 2 }}>{d}</div>)}
         </div>
       )}
