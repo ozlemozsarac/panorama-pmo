@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate } from '../lib/supabase'
+import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate, urunChip } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 const BOS_KALEM = {
@@ -11,7 +11,7 @@ const BOS_KALEM = {
 
 export default function ProjeDetay() {
   const { id } = useParams()
-  const { profile } = useAuth()
+  const { profile, seesAll } = useAuth()
   const [proje, setProje] = useState(null)
   const [tasks, setTasks] = useState([])
   const [ekip, setEkip] = useState([])
@@ -22,6 +22,7 @@ export default function ProjeDetay() {
   const [filtre, setFiltre] = useState('acik-tumu')
   const [modal, setModal] = useState(null)
   const [eforModal, setEforModal] = useState(null) // { task, hafta }
+  const [silModal, setSilModal] = useState(null)   // silinecek iş kalemi
   const [err, setErr] = useState('')
 
   useEffect(() => { yukle() }, [id])
@@ -109,7 +110,24 @@ export default function ProjeDetay() {
     return eforlar.filter(e => e.task_id === taskId).reduce((s, e) => s + Number(e.saat), 0)
   }
 
+  // İş kalemini sil — efor girilmişse engellenir (hem burada hem RLS'te)
+  async function sil() {
+    if (!silModal) return
+    if (taskEfor(silModal.id) > 0) {
+      setErr('Bu kaleme efor girilmiş, silinemez. Önce efor kayıtlarını temizleyin.')
+      setSilModal(null)
+      return
+    }
+    const { error } = await supabase.from('tasks').delete().eq('id', silModal.id)
+    if (error) { setErr('Silinemedi: ' + error.message); setSilModal(null); return }
+    setSilModal(null)
+    yukle()
+  }
+
   if (!proje) return <p>Yükleniyor…</p>
+
+  // Silme yetkisi: projeye atanmış kişiler + Direktör/GM (PMO)
+  const silebilir = seesAll || ekip.some(e => e.id === profile.id)
 
   const acikler = tasks.filter(t => t.durum !== 'tamamlandi')
   const gorunen = tasks.filter(t => {
@@ -142,7 +160,7 @@ export default function ProjeDetay() {
           <div style={{ fontSize: 12, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 10 }}>Ürün durumları</div>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             {urunler.map(pp => {
-              const renk = pp.durum ? URUN_DURUM_RENK[pp.durum] : { bg: '#fff', fg: 'var(--ink-3)' }
+              const renk = pp.durum ? URUN_DURUM_RENK[pp.durum] : { bg: 'var(--card)', fg: 'var(--ink-3)' }
               return (
                 <div key={pp.product_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontWeight: 500, minWidth: 64 }}>{pp.products.ad}</span>
@@ -206,7 +224,7 @@ export default function ProjeDetay() {
                       <div style={{ fontWeight: 500 }}>{t.baslik}</div>
                       {t.work_types && <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.work_types.ad}</div>}
                     </td>
-                    <td>{t.products ? <span className="chip">{t.products.ad}</span> : '—'}</td>
+                    <td>{t.products ? <span className={urunChip(t.products.ad)}>{t.products.ad}</span> : "—"}</td>
                     <td>{t.profiles?.ad || '—'}</td>
                     <td>
                       <span className={'chip' + (t.durum === 'tamamlandi' ? ' ok' : '')}>{DURUMLAR[t.durum]}</span>
@@ -227,14 +245,42 @@ export default function ProjeDetay() {
                       </button>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
-                      {t.durum !== 'tamamlandi' &&
-                        <button className="btn ghost sm" onClick={() => hizliDurum(t, 'tamamlandi')}>Tamamla</button>}
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        {t.durum !== 'tamamlandi' &&
+                          <button className="btn ghost sm" onClick={() => hizliDurum(t, 'tamamlandi')}>Tamamla</button>}
+                        {silebilir && (
+                          <button
+                            className="btn ghost sm"
+                            disabled={saat > 0}
+                            title={saat > 0 ? 'Efor girilmiş kalem silinemez — önce efor kayıtlarını temizleyin' : 'İş kalemini sil'}
+                            style={saat > 0 ? {} : { color: 'var(--danger)' }}
+                            onClick={() => setSilModal(t)}
+                          >Sil</button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* SİLME ONAY MODALI */}
+      {silModal && (
+        <div className="modal-bg" onClick={() => setSilModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <h2>İş kalemini sil</h2>
+            <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'var(--ink)' }}>{silModal.baslik}</strong> kalemi silinecek.
+              Bu işlem geri alınamaz.
+            </p>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setSilModal(null)}>Vazgeç</button>
+              <button className="btn danger" onClick={sil}>Sil</button>
+            </div>
+          </div>
         </div>
       )}
 
