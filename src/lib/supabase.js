@@ -40,6 +40,19 @@ export const URUN_DURUM_RENK = {
   yd_devir: { bg: '#FBF1DD', fg: '#A06A10' }
 }
 
+// Ürün rozeti rengi: Enroute kırmızı · Quest yeşil · Calldesk mor · Stokbar mavi
+// Renkler styles.css'te .chip.prod-* sınıflarında tanımlı (açık + koyu tema).
+export const URUN_SLUG = {
+  'Enroute': 'enroute',
+  'Quest': 'quest',
+  'Calldesk': 'calldesk',
+  'Stokbar': 'stokbar'
+}
+export function urunChip(ad) {
+  const slug = URUN_SLUG[ad]
+  return 'chip' + (slug ? ' prod-' + slug : '')
+}
+
 // Pazartesi bazlı hafta başlangıcı
 export function haftaBasi(d = new Date()) {
   const x = new Date(d)
