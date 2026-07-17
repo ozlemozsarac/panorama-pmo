@@ -283,3 +283,59 @@ body { font-family: var(--font-sans); }
     --track:#efefec; --prod-bg:#eef3fc; --prod-tx:#1d4ed8; --dis-bg:#f2f2ef; --dis-tx:#6b6b64; --detay:#f7f7f5;
   }
 }
+
+/* =====================================================================
+   PAKET A  —  koyu tema düzeltmeleri + ürün renkleri
+   ===================================================================== */
+
+/* --- Ürün renk token'ları: Enroute kırmızı · Quest yeşil · Calldesk mor · Stokbar mavi --- */
+:root {
+  --prod-enroute-bg: #FCEBEA; --prod-enroute-tx: #C2402F;
+  --prod-quest-bg:   #E6F4EC; --prod-quest-tx:   #1C7A52;
+  --prod-calldesk-bg:#F2ECFB; --prod-calldesk-tx:#6D28D9;
+  --prod-stokbar-bg: #E8F1FB; --prod-stokbar-tx: #1D5B8F;
+}
+[data-theme="dark"] {
+  --prod-enroute-bg: #2C1719; --prod-enroute-tx: #F58585;
+  --prod-quest-bg:   #12241A; --prod-quest-tx:   #5FD08A;
+  --prod-calldesk-bg:#1F1730; --prod-calldesk-tx:#A78BFA;
+  --prod-stokbar-bg: #17233B; --prod-stokbar-tx: #8FB6F5;
+}
+.chip.prod-enroute  { background: var(--prod-enroute-bg);  color: var(--prod-enroute-tx);  border-color: transparent; }
+.chip.prod-quest    { background: var(--prod-quest-bg);    color: var(--prod-quest-tx);    border-color: transparent; }
+.chip.prod-calldesk { background: var(--prod-calldesk-bg); color: var(--prod-calldesk-tx); border-color: transparent; }
+.chip.prod-stokbar  { background: var(--prod-stokbar-bg);  color: var(--prod-stokbar-tx);  border-color: transparent; }
+
+/* --- KOYU TEMA BUG'LARI: sabit renkleri token'a bağla --- */
+
+/* form alanları — #fff sabitti, koyu temada beyaz-üstüne-beyaz oluyordu */
+input, select, textarea { background: var(--card); color: var(--ink); }
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus { outline-color: #2E4A6B; }
+[data-theme="dark"] select option { background: var(--card); color: var(--ink); }
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: var(--ink-3); }
+
+/* aktif filtre çipi — color:#fff sabitti; koyu temada beyaz zemin + beyaz yazı */
+.filter-chip.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* modal, boş durum, satır hover */
+.modal { background: var(--card); }
+.empty { background: var(--detay); }
+tr.clickable:hover td { background: var(--detay); }
+
+/* --- Tema düğmesi: ikon-only, sol menü altı --- */
+.theme-toggle {
+  margin: 10px 20px 0;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--sidebar-border);
+  color: var(--sidebar-text);
+  font-size: 14px; line-height: 1;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--sidebar-strong); border-color: var(--sidebar-text); }
