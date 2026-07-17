@@ -48,8 +48,14 @@ export default function Layout({ children }) {
         {(seesAll || profile.yetki_rolu === 'hub_yon') && item('/atama-raporu', 'Atama raporu')}
         {isAdmin && item('/admin', 'Yönetim')}
 
-        <button className="theme-toggle" style={{ marginTop: 'auto' }} onClick={() => setDark(d => !d)}>
-          {dark ? '☀ Açık tema' : '☾ Koyu tema'}
+        <button
+          className="theme-toggle"
+          style={{ marginTop: 'auto' }}
+          onClick={() => setDark(d => !d)}
+          title={dark ? 'Açık temaya geç' : 'Koyu temaya geç'}
+          aria-label={dark ? 'Açık temaya geç' : 'Koyu temaya geç'}
+        >
+          {dark ? '☀' : '☾'}
         </button>
 
         <div className="sidebar-footer">
