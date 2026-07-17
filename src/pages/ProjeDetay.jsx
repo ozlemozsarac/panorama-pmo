@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate, urunChip } from '../lib/supabase'
+import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate, parseISO, urunChip } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 const BOS_KALEM = {
@@ -435,11 +435,11 @@ function EforForm({ task, eforlar, onSave, onCancel }) {
   const mevcutlar = eforlar.filter(e => e.task_id === task.id).sort((a, b) => a.hafta_baslangici.localeCompare(b.hafta_baslangici))
 
   function haftaKaydir(n) {
-    const d = new Date(hafta); d.setDate(d.getDate() + 7 * n); setHafta(isoDate(haftaBasi(d)))
+    const d = parseISO(hafta); d.setDate(d.getDate() + 7 * n); setHafta(isoDate(haftaBasi(d)))
   }
   const mevcutSaat = eforlar.find(e => e.task_id === task.id && e.hafta_baslangici === hafta)?.saat
 
-  const hs = new Date(hafta); const he = new Date(hafta); he.setDate(he.getDate() + 6)
+  const hs = parseISO(hafta); const he = parseISO(hafta); he.setDate(he.getDate() + 6)
 
   return (
     <>
