@@ -62,8 +62,23 @@ export function haftaBasi(d = new Date()) {
   return x
 }
 
+// 'YYYY-MM-DD' → yerel Date. new Date('2026-07-13') UTC gece yarısı olarak
+// parse edilir ve UTC- saat dilimlerinde bir gün geri kayar; bu güvenli.
+export function parseISO(s) {
+  const [y, m, g] = String(s).split('-').map(Number)
+  return new Date(y, m - 1, g)
+}
+
+// Date → 'YYYY-MM-DD' (YEREL tarih).
+// DİKKAT: Burada toISOString() KULLANILMAZ. haftaBasi() yerel saatle
+// Pazartesi 00:00 üretir; toISOString() bunu UTC'ye çevirdiği için
+// UTC+3'te Pazar 21:00'e düşer ve tarih bir gün geri kayardı.
 export function isoDate(d) {
-  return d.toISOString().slice(0, 10)
+  const x = new Date(d)
+  const y = x.getFullYear()
+  const m = String(x.getMonth() + 1).padStart(2, '0')
+  const g = String(x.getDate()).padStart(2, '0')
+  return `${y}-${m}-${g}`
 }
 
 export function fmtTarih(s) {
