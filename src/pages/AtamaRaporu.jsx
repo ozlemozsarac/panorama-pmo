@@ -1,6 +1,6 @@
 import { useMemo, useState, Fragment } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, URUN_SLUG } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useEffect } from 'react'
 
@@ -124,11 +124,19 @@ export default function AtamaRaporu() {
   const thStil = { textAlign: 'left', fontWeight: 500, color: 'var(--muted)', fontSize: 12, padding: '9px 14px', borderBottom: '1px solid var(--border)' }
   const tdStil = { padding: '11px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, verticalAlign: 'top' }
 
-  const urunRozet = (ad, sayi) => (
-    <span style={{ display: 'inline-block', background: 'var(--prod-bg)', color: 'var(--prod-tx)', fontSize: 12, padding: '2px 8px', borderRadius: 6, marginRight: 4, marginBottom: 3 }}>
-      {ad}{sayi != null ? ' ' + sayi : ''}
-    </span>
-  )
+  const urunRozet = (ad, sayi) => {
+    const slug = URUN_SLUG[ad]
+    return (
+      <span style={{
+        display: 'inline-block',
+        background: slug ? `var(--prod-${slug}-bg)` : 'var(--prod-bg)',
+        color: slug ? `var(--prod-${slug}-tx)` : 'var(--prod-tx)',
+        fontSize: 12, padding: '2px 8px', borderRadius: 6, marginRight: 4, marginBottom: 3
+      }}>
+        {ad}{sayi != null ? ' ' + sayi : ''}
+      </span>
+    )
+  }
   const disRozet = sayi => (
     <span style={{ display: 'inline-block', background: 'var(--dis-bg)', color: 'var(--dis-tx)', fontSize: 12, padding: '2px 8px', borderRadius: 6, marginRight: 4, marginBottom: 3 }}>
       dış{sayi != null ? ' ' + sayi : ''}
@@ -176,7 +184,7 @@ export default function AtamaRaporu() {
                     <div key={ad} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                       <div style={{ width: 60, fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ad}</div>
                       <div style={{ flex: 1, background: 'var(--track)', borderRadius: 3, height: 7, overflow: 'hidden' }}>
-                        <div style={{ width: (urunMax ? Math.round(sayi / urunMax * 100) : 0) + '%', height: '100%', background: 'var(--accent)' }} />
+                        <div style={{ width: (urunMax ? Math.round(sayi / urunMax * 100) : 0) + '%', height: '100%', background: URUN_SLUG[ad] ? `var(--prod-${URUN_SLUG[ad]}-tx)` : 'var(--accent)' }} />
                       </div>
                       <div style={{ ...monoStil, width: 26, fontSize: 12.5, textAlign: 'right' }}>{sayi}</div>
                     </div>
