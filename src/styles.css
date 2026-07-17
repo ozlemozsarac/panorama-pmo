@@ -325,17 +325,29 @@ input, select, textarea { background: var(--card); color: var(--ink); }
 .empty { background: var(--detay); }
 tr.clickable:hover td { background: var(--detay); }
 
-/* --- Tema düğmesi: ikon-only, sol menü altı --- */
-.theme-toggle {
-  margin: 10px 20px 0;
-  width: 32px; height: 32px;
-  display: inline-flex; align-items: center; justify-content: center;
+/* --- Tema düğmesi: ikon-only, footer'da "Çıkış yap" yanında --- */
+.sidebar-footer .footer-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.sidebar-footer .footer-actions button { margin-top: 10px; }
+.sidebar-footer .theme-toggle {
+  width: 32px;
+  flex-shrink: 0;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 1px solid var(--sidebar-border);
   color: var(--sidebar-text);
-  font-size: 14px; line-height: 1;
-  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 6px;
   cursor: pointer;
 }
-.theme-toggle:hover { color: var(--sidebar-strong); border-color: var(--sidebar-text); }
+.sidebar-footer .theme-toggle:hover {
+  color: var(--sidebar-strong);
+  border-color: var(--sidebar-text);
+}
