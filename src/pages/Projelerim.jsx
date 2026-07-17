@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, urunChip } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 export default function Projelerim() {
@@ -93,7 +93,7 @@ export default function Projelerim() {
                   {p.customers.ad}{lider ? ' · Lider: ' + (lider.profiles?.ad || '') : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {p.project_products.map((pp, i) => <span key={i} className="chip">{pp.products.ad}</span>)}
+                  {p.project_products.map((pp, i) => <span key={i} className={urunChip(pp.products.ad)}>{pp.products.ad}</span>)}
                   <span className="chip">{acik.length} açık iş</span>
                   {blokaj > 0 && <span className="chip danger">{blokaj} blokaj</span>}
                   {kritik > 0 && <span className="chip warn">{kritik} kritik</span>}
