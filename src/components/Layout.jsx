@@ -48,22 +48,22 @@ export default function Layout({ children }) {
         {(seesAll || profile.yetki_rolu === 'hub_yon') && item('/atama-raporu', 'Atama raporu')}
         {isAdmin && item('/admin', 'Yönetim')}
 
-        <button
-          className="theme-toggle"
-          style={{ marginTop: 'auto' }}
-          onClick={() => setDark(d => !d)}
-          title={dark ? 'Açık temaya geç' : 'Koyu temaya geç'}
-          aria-label={dark ? 'Açık temaya geç' : 'Koyu temaya geç'}
-        >
-          {dark ? '☀' : '☾'}
-        </button>
-
         <div className="sidebar-footer">
           <div className="name">{profile.ad || profile.eposta}</div>
           <div className="role">
             {ROLLER[profile.yetki_rolu]}{profile.hubs ? ' · ' + profile.hubs.ad : ''}
           </div>
-          <button onClick={signOut}>Çıkış yap</button>
+          <div className="footer-actions">
+            <button onClick={signOut}>Çıkış yap</button>
+            <button
+              className="theme-toggle"
+              onClick={() => setDark(d => !d)}
+              title={dark ? 'Açık temaya geç' : 'Koyu temaya geç'}
+              aria-label={dark ? 'Açık temaya geç' : 'Koyu temaya geç'}
+            >
+              {dark ? '☀' : '☾'}
+            </button>
+          </div>
         </div>
       </aside>
       <main className="main">{children}</main>
