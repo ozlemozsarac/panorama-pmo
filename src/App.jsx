@@ -34,14 +34,14 @@ export default function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to={seesAll ? '/ozet' : '/projeler'} replace />} />
+        <Route path="/" element={<Navigate to="/ozet" replace />} />
+        <Route path="/ozet" element={<GmOzeti />} />
         <Route path="/projeler" element={<Projelerim />} />
         <Route path="/projeler/:id" element={<ProjeDetay />} />
         <Route path="/efor" element={<Efor />} />
         <Route path="/izin" element={<Izin />} />
         <Route path="/ekip" element={<EkipSemasi />} />
         {(seesAll || profile.yetki_rolu === 'hub_yon') && <Route path="/atama-raporu" element={<AtamaRaporu />} />}
-        {seesAll && <Route path="/ozet" element={<GmOzeti />} />}
         {isAdmin && <Route path="/admin" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
