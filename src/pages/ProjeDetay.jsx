@@ -127,8 +127,6 @@ export default function ProjeDetay() {
   if (!proje) return <p>Yükleniyor…</p>
 
   // Silme yetkisi: projeye atanmış kişiler + Direktör/GM (PMO)
-  const silebilir = seesAll || ekip.some(e => e.id === profile.id)
-
   const acikler = tasks.filter(t => t.durum !== 'tamamlandi')
   const gorunen = tasks.filter(t => {
     if (filtre === 'acik-tumu') return t.durum !== 'tamamlandi'
@@ -255,7 +253,7 @@ export default function ProjeDetay() {
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                         {t.durum !== 'tamamlandi' &&
                           <button className="btn ghost sm" onClick={() => hizliDurum(t, 'tamamlandi')}>Tamamla</button>}
-                        {silebilir && (
+                        {(seesAll || t.olusturan_id === profile.id) && (
                           <button
                             className="btn ghost sm"
                             disabled={saat > 0}
@@ -506,7 +504,7 @@ function IliskiSagligi({ projectId, kanalim, seesAll }) {
     setYukleniyor(true)
     const { data } = await supabase
       .from('project_health')
-      .select('*, profiles ( ad )')
+      .select('*, profiles!project_health_giren_id_fkey ( ad )')
       .eq('project_id', projectId)
       .eq('donem', donem)
     const rows = data || []

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function Login() {
@@ -6,6 +6,12 @@ export default function Login() {
   const [sifre, setSifre] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Giriş ekranı her zaman açık temada — çıkışta <html data-theme="dark"> kalırsa
+  // login kartı beyaz-üstüne-beyaz kalıyordu.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+  }, [])
 
   async function girisYap(e) {
     e.preventDefault()
@@ -18,7 +24,7 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div style={{ fontWeight: 600, fontSize: 20 }}>Panorama PMO</div>
+        <div style={{ fontWeight: 600, fontSize: 20 }}>PMO Yönetim</div>
         <div className="logo-bar" style={{ margin: '8px 0 22px' }}>
           <span style={{ background: '#38BDF8' }} />
           <span style={{ background: '#34D399' }} />
