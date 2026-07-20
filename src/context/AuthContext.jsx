@@ -21,13 +21,26 @@ export function AuthProvider({ children }) {
       .then(({ data }) => setProfile(data))
   }, [session])
 
+  const rol = profile?.yetki_rolu
+  const isCS = rol === 'cs'
+  const isSatis = rol === 'satis'
+
   const value = {
     session,
     profile,
-    role: profile?.yetki_rolu,
-    seesAll: ['direktor', 'gm'].includes(profile?.yetki_rolu),
-    isAdmin: profile?.yetki_rolu === 'direktor',
-    isHubYon: profile?.yetki_rolu === 'hub_yon',
+    role: rol,
+    // Maliyet dahil her şeyi görenler — CS/Satış BURAYA EKLENMEZ (ücret verisi)
+    seesAll: ['direktor', 'gm'].includes(rol),
+    // Tüm projeleri görenler (maliyet hariç) — RLS'teki can_see_all_projects() ile aynı
+    seesAllProjects: ['direktor', 'gm', 'cs', 'satis'].includes(rol),
+    isAdmin: rol === 'direktor',
+    isHubYon: rol === 'hub_yon',
+    isCS,
+    isSatis,
+    // CS/Satış kısıtlı görünüm görür: sadece proje künyesi + ilişki sağlığı
+    kisitliGorunum: isCS || isSatis,
+    // Bu kullanıcının yazabileceği sağlık kanalı (RLS'teki my_kanal() ile aynı)
+    kanalim: isCS ? 'cs' : isSatis ? 'satis' : 'pm',
     signOut: () => supabase.auth.signOut()
   }
 
