@@ -135,7 +135,9 @@ tr.clickable:hover td { background: #f7fafc; cursor: pointer; }
 .person-row:last-child { border-bottom: none; }
 
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #10202e; }
-.login-card { background: #fff; border-radius: 16px; padding: 34px; width: 100%; max-width: 380px; }
+.login-card { background: #fff; color: #16232f; border-radius: 16px; padding: 34px; width: 100%; max-width: 380px; }
+.login-card label { color: #45566b; }
+.login-card input { background: #fff; color: #16232f; }
 
 .msg { font-size: 13px; padding: 9px 12px; border-radius: 8px; margin-top: 10px; }
 .msg.err { background: var(--danger-bg); color: var(--danger); }
