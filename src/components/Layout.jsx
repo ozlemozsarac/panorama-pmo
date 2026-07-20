@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { ROLLER } from '../lib/supabase'
 
 export default function Layout({ children }) {
-  const { profile, seesAll, isAdmin, signOut } = useAuth()
+  const { profile, seesAll, isAdmin, kisitliGorunum, signOut } = useAuth()
   const [dark, setDark] = useState(false) // oturum-içi tema (kalıcı değil)
 
   // Geist fontunu bir kez yükle (index.html'e dokunmadan)
@@ -40,13 +40,19 @@ export default function Layout({ children }) {
           <span style={{ background: '#FB923C' }} />
         </div>
 
-        {seesAll && item('/ozet', 'Genel Bakış')}
-        {item('/projeler', 'Projeler')}
-        {item('/efor', 'Efor Özet')}
-        {item('/izin', 'İzin')}
-        {item('/ekip', 'Ekip şeması')}
-        {(seesAll || profile.yetki_rolu === 'hub_yon') && item('/atama-raporu', 'Atama raporu')}
-        {isAdmin && item('/admin', 'Yönetim')}
+        {kisitliGorunum ? (
+          item('/projeler', 'Projeler')
+        ) : (
+          <>
+            {seesAll && item('/ozet', 'Genel Bakış')}
+            {item('/projeler', 'Projeler')}
+            {item('/efor', 'Efor Özet')}
+            {item('/izin', 'İzin')}
+            {item('/ekip', 'Ekip şeması')}
+            {(seesAll || profile.yetki_rolu === 'hub_yon') && item('/atama-raporu', 'Atama raporu')}
+            {isAdmin && item('/admin', 'Yönetim')}
+          </>
+        )}
 
         <div className="sidebar-footer">
           <div className="name">{profile.ad || profile.eposta}</div>
