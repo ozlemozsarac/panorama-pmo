@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, urunChip } from '../lib/supabase'
+import { supabase, urunChip, ceyrek, SAGLIK_SKORLARI } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 export default function Projelerim() {
-  const { profile, seesAll, isHubYon } = useAuth()
+  const { profile, seesAll, isHubYon, kisitliGorunum } = useAuth()
   const nav = useNavigate()
   const [projeler, setProjeler] = useState(null)
   const [hublar, setHublar] = useState([])
   const [hubFilter, setHubFilter] = useState('')
   const [q, setQ] = useState('')
+  const [saglik, setSaglik] = useState({})
 
   useEffect(() => { yukle() }, [])
 
@@ -35,6 +36,18 @@ export default function Projelerim() {
       list = list.filter(p => p.project_assignments.some(a => a.user_id === profile.id))
     }
     setProjeler(list)
+
+    // Bu çeyreğin ilişki sağlığı skorları (kart rozeti için)
+    const { data: hdata } = await supabase
+      .from('project_health')
+      .select('project_id, kanal, skor')
+      .eq('donem', ceyrek())
+    const map = {}
+    ;(hdata || []).forEach(h => {
+      if (!map[h.project_id]) map[h.project_id] = []
+      map[h.project_id].push(h.skor)
+    })
+    setSaglik(map)
   }
 
   if (projeler === null) return <p>Yükleniyor…</p>
@@ -84,19 +97,27 @@ export default function Projelerim() {
               <div key={p.id} className="card clickable" style={{ cursor: 'pointer' }} onClick={() => nav('/projeler/' + p.id)}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ fontWeight: 600 }}>{p.ad}</div>
-                  <span className="chip">
-                    <span className="hub-dot" style={{ background: p.customers.hubs.renk }} />
-                    {p.customers.hubs.ad}
-                  </span>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexShrink: 0 }}>
+                    {saglik[p.id]?.length > 0 && (() => {
+                      const enKotu = Math.min(...saglik[p.id])
+                      return <span className={'chip skor-' + enKotu} title={'İlişki sağlığı (bu çeyrek, en kötü kanal)'}>{SAGLIK_SKORLARI[enKotu].etiket}</span>
+                    })()}
+                    <span className="chip">
+                      <span className="hub-dot" style={{ background: p.customers.hubs.renk }} />
+                      {p.customers.hubs.ad}
+                    </span>
+                  </div>
                 </div>
                 <div style={{ color: 'var(--ink-3)', fontSize: 13, margin: '3px 0 10px' }}>
                   {p.customers.ad}{lider ? ' · Lider: ' + (lider.profiles?.ad || '') : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {p.project_products.map((pp, i) => <span key={i} className={urunChip(pp.products.ad)}>{pp.products.ad}</span>)}
-                  <span className="chip">{acik.length} açık iş</span>
-                  {blokaj > 0 && <span className="chip danger">{blokaj} blokaj</span>}
-                  {kritik > 0 && <span className="chip warn">{kritik} kritik</span>}
+                  {!kisitliGorunum && <>
+                    <span className="chip">{acik.length} açık iş</span>
+                    {blokaj > 0 && <span className="chip danger">{blokaj} blokaj</span>}
+                    {kritik > 0 && <span className="chip warn">{kritik} kritik</span>}
+                  </>}
                 </div>
               </div>
             )

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate, parseISO, urunChip } from '../lib/supabase'
+import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate, parseISO, urunChip, SAGLIK_KANALLARI, SAGLIK_SKORLARI, ceyrek, ceyrekKaydir, ceyrekEtiket } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 const BOS_KALEM = {
@@ -11,7 +11,7 @@ const BOS_KALEM = {
 
 export default function ProjeDetay() {
   const { id } = useParams()
-  const { profile, seesAll } = useAuth()
+  const { profile, seesAll, kisitliGorunum, kanalim } = useAuth()
   const [proje, setProje] = useState(null)
   const [tasks, setTasks] = useState([])
   const [ekip, setEkip] = useState([])
@@ -151,9 +151,16 @@ export default function ProjeDetay() {
           </p>
           <KlasorLink link={proje.klasor_linki} onSave={klasorGuncelle} />
         </div>
-        <button className="btn" onClick={() => setModal({ ...BOS_KALEM, sorumlu_id: profile.id })}>+ İş kalemi</button>
+        {!kisitliGorunum &&
+          <button className="btn" onClick={() => setModal({ ...BOS_KALEM, sorumlu_id: profile.id })}>+ İş kalemi</button>}
       </div>
 
+      {/* İLİŞKİ SAĞLIĞI — künyenin hemen altında, herkese görünür */}
+      <IliskiSagligi projectId={id} kanalim={kanalim} seesAll={seesAll} />
+
+      {/* CS/Satış: iş kalemleri, efor ve ürün durumları KAPALI. Burada bitiyor. */}
+      {kisitliGorunum ? null : (
+      <>
       {/* ÜRÜN DURUMLARI ŞERİDİ */}
       {urunler.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -265,6 +272,8 @@ export default function ProjeDetay() {
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
 
       {/* SİLME ONAY MODALI */}
@@ -475,5 +484,138 @@ function EforForm({ task, eforlar, onSave, onCancel }) {
         <button type="button" className="btn" onClick={() => onSave(task, hafta, saat)}>Kaydet</button>
       </div>
     </>
+  )
+}
+
+// ============================================================
+// İLİŞKİ SAĞLIĞI — 3 kanallı skor (PM / CS / Satış)
+// Genel durum = en kötü kanal. Kanallar uyuşmuyorsa bayrak.
+// Herkes üç kanalı görür; yalnızca kendi kanalını (kanalim) düzenler.
+// ============================================================
+function IliskiSagligi({ projectId, kanalim, seesAll }) {
+  const [donem, setDonem] = useState(ceyrek())
+  const [kayitlar, setKayitlar] = useState([])
+  const [yukleniyor, setYukleniyor] = useState(true)
+  const [taslak, setTaslak] = useState({ skor: null, kok_neden: '' })
+  const [kaydediliyor, setKaydediliyor] = useState(false)
+  const [hata, setHata] = useState('')
+
+  useEffect(() => { yukle() }, [projectId, donem])
+
+  async function yukle() {
+    setYukleniyor(true)
+    const { data } = await supabase
+      .from('project_health')
+      .select('*, profiles ( ad )')
+      .eq('project_id', projectId)
+      .eq('donem', donem)
+    const rows = data || []
+    setKayitlar(rows)
+    const benim = rows.find(r => r.kanal === kanalim)
+    setTaslak({ skor: benim?.skor ?? null, kok_neden: benim?.kok_neden ?? '' })
+    setYukleniyor(false)
+  }
+
+  const kanalKaydi = k => kayitlar.find(r => r.kanal === k)
+  const girilenSkorlar = kayitlar.map(r => r.skor)
+  const enKotu = girilenSkorlar.length ? Math.min(...girilenSkorlar) : null
+  const uyusmazlik = girilenSkorlar.length >= 2 && (Math.max(...girilenSkorlar) - Math.min(...girilenSkorlar) >= 2)
+
+  async function kaydet() {
+    if (!taslak.skor) { setHata('Önce bir skor seç.'); return }
+    setKaydediliyor(true); setHata('')
+    const { error } = await supabase.from('project_health').upsert({
+      project_id: projectId,
+      kanal: kanalim,
+      donem,
+      skor: taslak.skor,
+      kok_neden: taslak.kok_neden || null,
+      guncelleme: new Date().toISOString()
+    }, { onConflict: 'project_id,kanal,donem' })
+    setKaydediliyor(false)
+    if (error) { setHata('Kaydedilemedi: ' + error.message); return }
+    yukle()
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h2 style={{ margin: 0 }}>İlişki Sağlığı</h2>
+          {enKotu != null && (
+            <span className={'chip skor-' + enKotu}>Genel: {SAGLIK_SKORLARI[enKotu].etiket}</span>
+          )}
+          {uyusmazlik && (
+            <span className="uyusmazlik">⚠ Kanallar arası fark</span>
+          )}
+        </div>
+        <div className="week-nav" style={{ gap: 8 }}>
+          <button className="btn ghost sm" onClick={() => setDonem(ceyrekKaydir(donem, -1))}>←</button>
+          <span style={{ fontSize: 13, minWidth: 110, textAlign: 'center' }}>{ceyrekEtiket(donem)}</span>
+          <button className="btn ghost sm" onClick={() => setDonem(ceyrekKaydir(donem, 1))} disabled={donem === ceyrek()}>→</button>
+        </div>
+      </div>
+
+      {yukleniyor ? <p style={{ color: 'var(--ink-3)' }}>Yükleniyor…</p> : (
+        <>
+          {/* ÜÇ KANAL */}
+          <div>
+            {['pm', 'cs', 'satis'].map(k => {
+              const r = kanalKaydi(k)
+              return (
+                <div className="kanal-satir" key={k}>
+                  <div className="kanal-ad">
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{SAGLIK_KANALLARI[k]}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
+                      {r ? `${r.profiles?.ad || '—'} · ${fmtTarih(isoDate(new Date(r.guncelleme)))}` : '—'}
+                    </div>
+                  </div>
+                  <div className="kanal-skor">
+                    {r
+                      ? <span className={'chip skor-' + r.skor}>{r.skor} · {SAGLIK_SKORLARI[r.skor].etiket}</span>
+                      : <span className="chip" style={{ color: 'var(--ink-3)' }}>Girilmedi</span>}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5, flex: 1 }}>
+                    {r?.kok_neden || <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>Açıklama girilmedi</span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* GİRİŞ PANELİ — yalnızca kendi kanalın */}
+          <div style={{ background: 'var(--detay)', border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginTop: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>
+              Senin değerlendirmen <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>· {SAGLIK_KANALLARI[kanalim]} · {ceyrekEtiket(donem)}</span>
+            </div>
+            <div className="skor-sec" style={{ marginBottom: 12 }}>
+              {[1, 2, 3, 4].map(s => (
+                <button
+                  key={s}
+                  className={'skor-btn' + (taslak.skor === s ? ' on-' + s : '')}
+                  title={SAGLIK_SKORLARI[s].aciklama}
+                  onClick={() => setTaslak({ ...taslak, skor: s })}
+                >{s} · {SAGLIK_SKORLARI[s].etiket}{taslak.skor === s ? ' ✓' : ''}</button>
+              ))}
+            </div>
+            <div className="field">
+              <label>Kök neden / açıklama</label>
+              <textarea
+                rows={2}
+                placeholder="Bu skoru neden verdin? (opsiyonel ama önerilir)"
+                value={taslak.kok_neden}
+                onChange={e => setTaslak({ ...taslak, kok_neden: e.target.value })}
+              />
+            </div>
+            {hata && <p style={{ color: 'var(--danger)', fontSize: 13, margin: '4px 0' }}>{hata}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+              <button className="btn" onClick={kaydet} disabled={kaydediliyor}>
+                {kaydediliyor ? 'Kaydediliyor…' : 'Kaydet'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
