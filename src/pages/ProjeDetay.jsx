@@ -154,7 +154,7 @@ export default function ProjeDetay() {
       </div>
 
       {/* İLİŞKİ SAĞLIĞI — künyenin hemen altında, herkese görünür */}
-      <IliskiSagligi projectId={id} kanalim={kanalim} seesAll={seesAll} />
+      <IliskiSagligi projectId={id} kanalim={kanalim} seesAll={seesAll} girenId={profile.id} />
 
       {/* CS/Satış: iş kalemleri, efor ve ürün durumları KAPALI. Burada bitiyor. */}
       {kisitliGorunum ? null : (
@@ -490,7 +490,7 @@ function EforForm({ task, eforlar, onSave, onCancel }) {
 // Genel durum = en kötü kanal. Kanallar uyuşmuyorsa bayrak.
 // Herkes üç kanalı görür; yalnızca kendi kanalını (kanalim) düzenler.
 // ============================================================
-function IliskiSagligi({ projectId, kanalim, seesAll }) {
+function IliskiSagligi({ projectId, kanalim, seesAll, girenId }) {
   const [donem, setDonem] = useState(ceyrek())
   const [kayitlar, setKayitlar] = useState([])
   const [yukleniyor, setYukleniyor] = useState(true)
@@ -528,6 +528,7 @@ function IliskiSagligi({ projectId, kanalim, seesAll }) {
       donem,
       skor: taslak.skor,
       kok_neden: taslak.kok_neden || null,
+      giren_id: girenId,
       guncelleme: new Date().toISOString()
     }, { onConflict: 'project_id,kanal,donem' })
     setKaydediliyor(false)

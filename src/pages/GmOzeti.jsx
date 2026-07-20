@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase, haftaBasi, isoDate, fmtTarih, urunChip, ceyrek, SAGLIK_SKORLARI } from '../lib/supabase'
+import { supabase, haftaBasi, isoDate, parseISO, fmtTarih, urunChip, ceyrek, SAGLIK_SKORLARI } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 export default function GmOzeti() {
@@ -38,7 +38,7 @@ function YoneticiOzeti() {
 
   const acik = d.tasks.filter(t => t.durum !== 'tamamlandi')
   const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
-  const geciken = acik.filter(t => t.termin && new Date(t.termin) < bugun)
+  const geciken = acik.filter(t => t.termin && parseISO(t.termin) < bugun)
   const eforSaat = d.effort.reduce((s, e) => s + Number(e.saat), 0)
   const eforGiren = new Set(d.effort.map(e => e.user_id)).size
   const eforBekleyen = d.profiles.filter(p => !['gm', 'direktor'].includes(p.yetki_rolu)).length - eforGiren
@@ -267,12 +267,12 @@ function Islerim() {
 
   const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
   const buHaftaSon = new Date(bugun); buHaftaSon.setDate(buHaftaSon.getDate() + (7 - ((bugun.getDay() + 6) % 7)))
-  const gunFarki = t => t.termin ? Math.round((new Date(t.termin) - bugun) / 86400000) : null
+  const gunFarki = t => t.termin ? Math.round((parseISO(t.termin) - bugun) / 86400000) : null
 
   const beklemede = tasks.filter(t => t.durum === 'beklemede')
   const aktif = tasks.filter(t => t.durum !== 'beklemede')
-  const gecikmis = aktif.filter(t => t.termin && new Date(t.termin) < bugun)
-  const buHafta = aktif.filter(t => t.termin && new Date(t.termin) >= bugun && new Date(t.termin) <= buHaftaSon)
+  const gecikmis = aktif.filter(t => t.termin && parseISO(t.termin) < bugun)
+  const buHafta = aktif.filter(t => t.termin && parseISO(t.termin) >= bugun && parseISO(t.termin) <= buHaftaSon)
   const ileride = aktif.filter(t => !gecikmis.includes(t) && !buHafta.includes(t))
 
   const terminRozet = t => {
