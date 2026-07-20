@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { supabase, haftaBasi, isoDate, fmtTarih } from '../lib/supabase'
+import { Link, useNavigate } from 'react-router-dom'
+import { supabase, haftaBasi, isoDate, fmtTarih, urunChip, ceyrek, SAGLIK_SKORLARI } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 export default function GmOzeti() {
+  const { seesAll } = useAuth()
+  // Yönetici (direktör/GM) → portföy özeti; diğer herkes → kişisel işler tezgahı
+  return seesAll ? <YoneticiOzeti /> : <Islerim />
+}
+
+function YoneticiOzeti() {
   const [d, setD] = useState(null)
 
   useEffect(() => { yukle() }, [])
@@ -10,18 +17,20 @@ export default function GmOzeti() {
   async function yukle() {
     const haftaStr = isoDate(haftaBasi())
     const bugun = isoDate(new Date())
-    const [hubs, customers, projects, profiles, tasks, effort, leaves] = await Promise.all([
+    const [hubs, customers, projects, profiles, tasks, effort, leaves, health] = await Promise.all([
       supabase.from('hubs').select('*').order('sira'),
       supabase.from('customers').select('id, hub_id'),
       supabase.from('projects').select('id, ad, aktif, customers ( hub_id, ad )').eq('aktif', true),
       supabase.from('profiles').select('id, ad, hub_id, aktif, yetki_rolu, job_titles ( ad )').eq('aktif', true),
       supabase.from('tasks').select('id, project_id, durum, blokaj, kritik, termin, waiting_reasons ( ad ), projects ( ad, customers ( hub_id ) )'),
       supabase.from('effort_entries').select('user_id, project_id, saat').eq('hafta_baslangici', haftaStr),
-      supabase.from('leaves').select('user_id, baslangic, bitis, profiles ( ad )').lte('baslangic', bugun).gte('bitis', bugun)
+      supabase.from('leaves').select('user_id, baslangic, bitis, profiles ( ad )').lte('baslangic', bugun).gte('bitis', bugun),
+      supabase.from('project_health').select('project_id, kanal, skor, projects ( ad, aktif, customers ( hubs ( ad ) ) )').eq('donem', ceyrek())
     ])
     setD({
       hubs: hubs.data || [], customers: customers.data || [], projects: projects.data || [],
-      profiles: profiles.data || [], tasks: tasks.data || [], effort: effort.data || [], leaves: leaves.data || []
+      profiles: profiles.data || [], tasks: tasks.data || [], effort: effort.data || [], leaves: leaves.data || [],
+      health: health.data || []
     })
   }
 
@@ -46,14 +55,94 @@ export default function GmOzeti() {
     beklemeNedenleri[t.waiting_reasons.ad] = (beklemeNedenleri[t.waiting_reasons.ad] || 0) + 1
   })
 
+  // --- SAĞLIK KATMANI ---
+  // Proje bazında kanalları topla → en kötü kanal + uyuşmazlık
+  const projeSaglik = {}
+  d.health.forEach(h => {
+    if (!h.projects?.aktif) return
+    if (!projeSaglik[h.project_id]) projeSaglik[h.project_id] = { ad: h.projects?.ad, hub: h.projects?.customers?.hubs?.ad, skorlar: [] }
+    projeSaglik[h.project_id].skorlar.push(h.skor)
+  })
+  const saglikListe = Object.entries(projeSaglik).map(([pid, v]) => ({
+    pid,
+    ad: v.ad,
+    hub: v.hub,
+    enKotu: Math.min(...v.skorlar),
+    uyusmazlik: v.skorlar.length >= 2 && (Math.max(...v.skorlar) - Math.min(...v.skorlar) >= 2)
+  }))
+  const dagilim = { 1: 0, 2: 0, 3: 0, 4: 0 }
+  saglikListe.forEach(s => { dagilim[s.enKotu]++ })
+  const dagilimMax = Math.max(1, ...Object.values(dagilim))
+  const skorlananProje = saglikListe.length
+  const skorsuzProje = d.projects.length - skorlananProje
+  const uyusmazSayi = saglikListe.filter(s => s.uyusmazlik).length
+  // Kriz + Gergin olan tüm projeler (en kötüden iyiye)
+  const riskliListe = saglikListe.filter(s => s.enKotu <= 2).sort((a, b) => a.enKotu - b.enKotu)
+
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>Özet</h1>
-          <p>Yapısal görünüm her zaman güncel; akış metrikleri ekip girdikçe dolar.</p>
+          <h1>Genel Bakış</h1>
+          <p>Portföy sağlığı ve akış · tüm hub'lar</p>
         </div>
       </div>
+
+      {/* SAĞLIK KATMANI — en üstte */}
+      <h2>Proje sağlığı <span style={{ color: 'var(--ink-3)', fontWeight: 400, fontSize: 14 }}>· {ceyrek().replace('-Q', ' · ') + '. çeyrek'}</span></h2>
+      <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', marginBottom: 14 }}>
+        <div className="card">
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 12 }}>Skor dağılımı ({skorlananProje} proje)</div>
+          {skorlananProje === 0
+            ? <p style={{ color: 'var(--ink-3)', fontSize: 14 }}>Bu çeyrek henüz skor girilmedi.</p>
+            : [1, 2, 3, 4].map(s => (
+              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <div style={{ width: 60, fontSize: 12.5, color: `var(--skor${s}-tx)` }}>{SAGLIK_SKORLARI[s].etiket}</div>
+                <div style={{ flex: 1, background: 'var(--track, var(--line))', borderRadius: 3, height: 8, overflow: 'hidden' }}>
+                  <div style={{ width: Math.round(dagilim[s] / dagilimMax * 100) + '%', height: '100%', background: `var(--skor${s}-tx)` }} />
+                </div>
+                <div style={{ width: 22, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 13 }}>{dagilim[s]}</div>
+              </div>
+            ))}
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 12 }}>Dikkat gerektiren</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 13 }}>Kriz + Gergin</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16, fontWeight: 600, color: 'var(--danger)' }}>{dagilim[1] + dagilim[2]}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 13 }}>Kanal uyuşmazlığı</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16, fontWeight: 600, color: 'var(--warn)' }}>{uyusmazSayi}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13 }}>Skor girilmemiş</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16, fontWeight: 600, color: 'var(--ink-3)' }}>{skorsuzProje}</span>
+          </div>
+        </div>
+      </div>
+
+      {riskliListe.length > 0 && (
+        <div className="card" style={{ padding: 0, marginBottom: 22 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', padding: '12px 14px 4px' }}>En riskli projeler — Kriz + Gergin (en kötü kanal)</div>
+          <table>
+            <tbody>
+              {riskliListe.map(s => (
+                <tr key={s.pid}>
+                  <td>
+                    <Link to={'/projeler/' + s.pid}>{s.ad}</Link>
+                    <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{s.hub ? ' · ' + s.hub : ''}</span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {s.uyusmazlik && <span className="chip" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>⚠ uyuşmazlık</span>}{' '}
+                    <span className={'chip skor-' + s.enKotu}>{s.enKotu} · {SAGLIK_SKORLARI[s.enKotu].etiket}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <h2>Yapı</h2>
       <div className="card" style={{ padding: 0, marginBottom: 22 }}>
@@ -142,6 +231,142 @@ export default function GmOzeti() {
             : <p style={{ fontSize: 14 }}>{d.leaves.map(l => l.profiles?.ad).filter(Boolean).join(', ')}</p>}
         </div>
       </div>
+    </>
+  )
+}
+
+// ============================================================
+// İŞLERİM — PM / danışman / ekip için kişisel aktif tezgah
+// Termine göre sıralı. Gecikmiş + Bu hafta açık; Beklemede + İleride katlanır.
+// Tamamla: satırdan doğrudan. Efor: mevcut efor modalını açmak için projeye git.
+// ============================================================
+function Islerim() {
+  const { profile } = useAuth()
+  const nav = useNavigate()
+  const [tasks, setTasks] = useState(null)
+  const [digerAcik, setDigerAcik] = useState(false)
+
+  useEffect(() => { yukle() }, [])
+
+  async function yukle() {
+    const { data } = await supabase
+      .from('tasks')
+      .select('id, baslik, durum, termin, blokaj, kritik, project_id, waiting_reasons ( ad ), products ( ad ), projects ( ad )')
+      .eq('sorumlu_id', profile.id)
+      .neq('durum', 'tamamlandi')
+      .order('termin', { ascending: true, nullsFirst: false })
+    setTasks(data || [])
+  }
+
+  async function tamamla(t) {
+    await supabase.from('tasks').update({ durum: 'tamamlandi' }).eq('id', t.id)
+    yukle()
+  }
+
+  if (!tasks) return <p>Yükleniyor…</p>
+
+  const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
+  const buHaftaSon = new Date(bugun); buHaftaSon.setDate(buHaftaSon.getDate() + (7 - ((bugun.getDay() + 6) % 7)))
+  const gunFarki = t => t.termin ? Math.round((new Date(t.termin) - bugun) / 86400000) : null
+
+  const beklemede = tasks.filter(t => t.durum === 'beklemede')
+  const aktif = tasks.filter(t => t.durum !== 'beklemede')
+  const gecikmis = aktif.filter(t => t.termin && new Date(t.termin) < bugun)
+  const buHafta = aktif.filter(t => t.termin && new Date(t.termin) >= bugun && new Date(t.termin) <= buHaftaSon)
+  const ileride = aktif.filter(t => !gecikmis.includes(t) && !buHafta.includes(t))
+
+  const terminRozet = t => {
+    if (!t.termin) return <span style={{ color: 'var(--ink-3)' }}>termin yok</span>
+    const g = gunFarki(t)
+    if (g < 0) return <span style={{ color: 'var(--danger)', fontFamily: "'IBM Plex Mono', monospace" }}>{fmtTarih(t.termin)} · {-g}g geç</span>
+    if (g === 0) return <span style={{ color: 'var(--warn)', fontFamily: "'IBM Plex Mono', monospace" }}>bugün</span>
+    return <span style={{ color: 'var(--ink-3)', fontFamily: "'IBM Plex Mono', monospace" }}>{fmtTarih(t.termin)}</span>
+  }
+
+  const Satir = t => (
+    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderTop: '1px solid var(--line)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500 }}>{t.baslik}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>
+          <Link to={'/projeler/' + t.project_id}>{t.projects?.ad}</Link>
+          {t.products && <> · <span className={urunChip(t.products.ad)}>{t.products.ad}</span></>}
+          {t.blokaj && <> · <span className="chip danger">Blokaj</span></>}
+          {t.kritik && <> · <span className="chip warn">Kritik</span></>}
+        </div>
+      </div>
+      <div style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>{terminRozet(t)}</div>
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <button className="btn ghost sm" onClick={() => tamamla(t)}>Tamamla</button>
+        <button className="btn ghost sm" onClick={() => nav('/projeler/' + t.project_id)}>Efor</button>
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h1>İşlerim</h1>
+          <p>Bugün üstünde olan işler · termine göre sıralı</p>
+        </div>
+      </div>
+
+      <div className="grid grid-4" style={{ marginBottom: 22 }}>
+        <div className="card kpi">
+          <div className="num" style={{ color: gecikmis.length ? 'var(--danger)' : undefined }}>{gecikmis.length}</div>
+          <div className="lbl">Termini geçmiş</div>
+        </div>
+        <div className="card kpi">
+          <div className="num">{aktif.filter(t => gunFarki(t) === 0).length}</div>
+          <div className="lbl">Bugün terminli</div>
+        </div>
+        <div className="card kpi">
+          <div className="num">{buHafta.length}</div>
+          <div className="lbl">Bu hafta</div>
+        </div>
+        <div className="card kpi">
+          <div className="num">{beklemede.length}</div>
+          <div className="lbl">Beklemede</div>
+        </div>
+      </div>
+
+      {tasks.length === 0 && (
+        <div className="empty"><strong>Üstünde açık iş yok</strong>Sana atanmış tamamlanmamış iş kalemi bulunmuyor.</div>
+      )}
+
+      {gecikmis.length > 0 && (
+        <>
+          <h2 style={{ color: 'var(--danger)', fontSize: 15 }}>Gecikmiş</h2>
+          <div className="card" style={{ padding: 0, marginBottom: 20, borderTop: 'none' }}>{gecikmis.map(Satir)}</div>
+        </>
+      )}
+
+      {buHafta.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15 }}>Bu hafta</h2>
+          <div className="card" style={{ padding: 0, marginBottom: 20, borderTop: 'none' }}>{buHafta.map(Satir)}</div>
+        </>
+      )}
+
+      {(ileride.length > 0 || beklemede.length > 0) && (
+        <div style={{ marginTop: 4 }}>
+          <button className="btn ghost" onClick={() => setDigerAcik(!digerAcik)}>
+            {digerAcik ? '▾' : '▸'} Diğer işler ({ileride.length + beklemede.length})
+          </button>
+          {digerAcik && (
+            <div style={{ marginTop: 12 }}>
+              {ileride.length > 0 && <>
+                <h2 style={{ fontSize: 14, color: 'var(--ink-2)' }}>İleride</h2>
+                <div className="card" style={{ padding: 0, marginBottom: 16, borderTop: 'none' }}>{ileride.map(Satir)}</div>
+              </>}
+              {beklemede.length > 0 && <>
+                <h2 style={{ fontSize: 14, color: 'var(--ink-2)' }}>Beklemede</h2>
+                <div className="card" style={{ padding: 0, borderTop: 'none' }}>{beklemede.map(Satir)}</div>
+              </>}
+            </div>
+          )}
+        </div>
+      )}
     </>
   )
 }
