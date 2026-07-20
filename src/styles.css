@@ -259,21 +259,6 @@ body { font-family: var(--font-sans); }
   background: transparent !important;
 }
 
-/* --- Tema düğmesi (sol menü altı) --- */
-.theme-toggle {
-  display: block;
-  margin: 0 16px 10px;
-  padding: 7px 10px;
-  background: transparent;
-  border: 1px solid var(--sidebar-border);
-  color: var(--sidebar-text);
-  font: inherit;
-  font-size: 12px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.theme-toggle:hover { color: var(--sidebar-strong); }
-
 /* --- PDF: her zaman açık tema (koyu baskıda okunmaz) --- */
 @media print {
   [data-theme="dark"] {
