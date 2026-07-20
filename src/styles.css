@@ -351,3 +351,50 @@ tr.clickable:hover td { background: var(--detay); }
   color: var(--sidebar-strong);
   border-color: var(--sidebar-text);
 }
+
+/* =====================================================================
+   PAKET B  —  İlişki Sağlığı skor renkleri
+   1 Kriz (kırmızı) · 2 Gergin (turuncu) · 3 Nötr (sarı) · 4 Memnun (yeşil)
+   ===================================================================== */
+:root {
+  --skor1-bg:#FCEBEA; --skor1-tx:#C2402F;
+  --skor2-bg:#FCEEDD; --skor2-tx:#B4600A;
+  --skor3-bg:#FBF6DD; --skor3-tx:#8A6D10;
+  --skor4-bg:#E6F4EC; --skor4-tx:#1C7A52;
+}
+[data-theme="dark"] {
+  --skor1-bg:#2C1719; --skor1-tx:#F58585;
+  --skor2-bg:#2A2013; --skor2-tx:#E0A83B;
+  --skor3-bg:#26240F; --skor3-tx:#D6C24A;
+  --skor4-bg:#12241A; --skor4-tx:#5FD08A;
+}
+.chip.skor-1 { background: var(--skor1-bg); color: var(--skor1-tx); border-color: transparent; }
+.chip.skor-2 { background: var(--skor2-bg); color: var(--skor2-tx); border-color: transparent; }
+.chip.skor-3 { background: var(--skor3-bg); color: var(--skor3-tx); border-color: transparent; }
+.chip.skor-4 { background: var(--skor4-bg); color: var(--skor4-tx); border-color: transparent; }
+
+/* Skor seçim butonları (giriş paneli) */
+.skor-sec { display: flex; gap: 8px; flex-wrap: wrap; }
+.skor-btn {
+  font: inherit; font-size: 12.5px; padding: 7px 12px; border-radius: 8px;
+  background: transparent; cursor: pointer; width: auto;
+  border: 1px solid var(--line); color: var(--ink-2);
+}
+.skor-btn:hover { border-color: var(--ink-3); }
+.skor-btn.on-1 { background: var(--skor1-bg); color: var(--skor1-tx); border-color: var(--skor1-tx); font-weight: 600; }
+.skor-btn.on-2 { background: var(--skor2-bg); color: var(--skor2-tx); border-color: var(--skor2-tx); font-weight: 600; }
+.skor-btn.on-3 { background: var(--skor3-bg); color: var(--skor3-tx); border-color: var(--skor3-tx); font-weight: 600; }
+.skor-btn.on-4 { background: var(--skor4-bg); color: var(--skor4-tx); border-color: var(--skor4-tx); font-weight: 600; }
+
+/* Kanal satırı */
+.kanal-satir {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
+.kanal-satir:last-child { border-bottom: none; }
+.kanal-satir .kanal-ad { width: 150px; flex-shrink: 0; }
+.kanal-satir .kanal-skor { width: 104px; flex-shrink: 0; }
+.uyusmazlik {
+  font-size: 11.5px; color: var(--danger); border: 1px solid var(--danger);
+  border-radius: 20px; padding: 2px 9px; white-space: nowrap;
+}
