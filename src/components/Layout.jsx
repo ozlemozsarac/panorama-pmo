@@ -44,7 +44,7 @@ export default function Layout({ children }) {
           item('/projeler', 'Projeler')
         ) : (
           <>
-            {seesAll && item('/ozet', 'Genel Bakış')}
+            {item('/ozet', 'Genel Bakış')}
             {item('/projeler', 'Projeler')}
             {item('/efor', 'Efor Özet')}
             {item('/izin', 'İzin')}
