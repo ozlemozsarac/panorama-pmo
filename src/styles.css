@@ -333,7 +333,7 @@ tr.clickable:hover td { background: var(--detay); }
 }
 .sidebar-footer .footer-actions button { margin-top: 10px; }
 .sidebar-footer .theme-toggle {
-  width: 32px;
+  width: 30px;
   flex-shrink: 0;
   padding: 0;
   display: inline-flex;
@@ -342,11 +342,10 @@ tr.clickable:hover td { background: var(--detay); }
   background: transparent;
   border: 1px solid var(--sidebar-border);
   color: var(--sidebar-text);
-  font-size: 13px;
-  line-height: 1;
   border-radius: 6px;
   cursor: pointer;
 }
+.sidebar-footer .theme-toggle svg { display: block; }
 .sidebar-footer .theme-toggle:hover {
   color: var(--sidebar-strong);
   border-color: var(--sidebar-text);
