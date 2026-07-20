@@ -12,11 +12,24 @@ import AtamaRaporu from './pages/AtamaRaporu'
 import Admin from './pages/Admin'
 
 export default function App() {
-  const { session, profile, seesAll, isAdmin } = useAuth()
+  const { session, profile, seesAll, isAdmin, kisitliGorunum } = useAuth()
 
   if (session === undefined) return null
   if (!session) return <Login />
   if (!profile) return <div style={{ padding: 40 }}>Profil yükleniyor…</div>
+
+  // CS ve Satış: yalnızca Projeler + proje detayı (kısıtlı görünüm)
+  if (kisitliGorunum) {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/projeler" element={<Projelerim />} />
+          <Route path="/projeler/:id" element={<ProjeDetay />} />
+          <Route path="*" element={<Navigate to="/projeler" replace />} />
+        </Routes>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>
