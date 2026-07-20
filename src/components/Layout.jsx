@@ -33,7 +33,7 @@ export default function Layout({ children }) {
   return (
     <div className="layout">
       <aside className="sidebar">
-        <div className="logo">Panorama PMO</div>
+        <div className="logo">PMO Yönetim</div>
         <div className="logo-bar">
           <span style={{ background: '#38BDF8' }} />
           <span style={{ background: '#34D399' }} />
