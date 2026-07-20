@@ -24,7 +24,42 @@ export const ROLLER = {
   gm: 'Genel Müdür',
   hub_yon: 'Hub Yöneticisi',
   pm: 'Proje Yöneticisi',
-  ekip: 'Ekip Üyesi'
+  ekip: 'Ekip Üyesi',
+  cs: 'Customer Success',
+  satis: 'Satış'
+}
+
+// ---- İLİŞKİ SAĞLIĞI ----
+
+export const SAGLIK_KANALLARI = {
+  pm: 'Proje Yöneticisi',
+  cs: 'Customer Success',
+  satis: 'Satış'
+}
+
+// 1 = en kötü, 4 = en iyi
+export const SAGLIK_SKORLARI = {
+  1: { etiket: 'Kriz', slug: 'kriz', aciklama: 'Müşteri çok şikayetçi, ilişkiyi kesme veya rakibe gitme sinyali veriyor. Acil müdahale gerekiyor.' },
+  2: { etiket: 'Gergin', slug: 'gergin', aciklama: 'Çözülmemiş majör şikayetler var. Müşteri memnuniyetsizliğini açıkça dile getiriyor.' },
+  3: { etiket: 'Nötr', slug: 'notr', aciklama: 'Büyük bir kriz yok ama müşteri çok mutlu da değil. Rutin işler yürüyor, iletişim yüzeysel.' },
+  4: { etiket: 'Memnun', slug: 'memnun', aciklama: 'İşler yolunda. Müşteri hizmetten/üründen memnun, iletişim düzenli ve sağlıklı.' }
+}
+
+// Çeyrek: '2026-Q3'
+export function ceyrek(d = new Date()) {
+  const x = new Date(d)
+  return `${x.getFullYear()}-Q${Math.floor(x.getMonth() / 3) + 1}`
+}
+
+export function ceyrekKaydir(donem, n) {
+  const [y, q] = donem.split('-Q').map(Number)
+  const toplam = (y * 4 + (q - 1)) + n
+  return `${Math.floor(toplam / 4)}-Q${(toplam % 4) + 1}`
+}
+
+export function ceyrekEtiket(donem) {
+  const [y, q] = donem.split('-Q')
+  return `${y} · ${q}. çeyrek`
 }
 
 export const URUN_DURUMLARI = {
