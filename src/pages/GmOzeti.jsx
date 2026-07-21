@@ -11,13 +11,14 @@ export default function GmOzeti() {
 
 function YoneticiOzeti() {
   const [d, setD] = useState(null)
+  const [hata, setHata] = useState('')
 
   useEffect(() => { yukle() }, [])
 
   async function yukle() {
     const haftaStr = isoDate(haftaBasi())
     const bugun = isoDate(new Date())
-    const [hubs, customers, projects, profiles, tasks, effort, leaves, health] = await Promise.all([
+    const sonuclar = await Promise.all([
       supabase.from('hubs').select('*').order('sira'),
       supabase.from('customers').select('id, hub_id'),
       supabase.from('projects').select('id, ad, aktif, customers ( hub_id, ad )').eq('aktif', true),
@@ -27,6 +28,9 @@ function YoneticiOzeti() {
       supabase.from('leaves').select('user_id, baslangic, bitis, profiles ( ad )').lte('baslangic', bugun).gte('bitis', bugun),
       supabase.from('project_health').select('project_id, kanal, skor, projects ( ad, aktif, customers ( hubs ( ad ) ) )').eq('donem', ceyrek())
     ])
+    const ilkHata = sonuclar.find(r => r.error)
+    if (ilkHata) { setHata('Veri yüklenemedi: ' + ilkHata.error.message); return }
+    const [hubs, customers, projects, profiles, tasks, effort, leaves, health] = sonuclar
     setD({
       hubs: hubs.data || [], customers: customers.data || [], projects: projects.data || [],
       profiles: profiles.data || [], tasks: tasks.data || [], effort: effort.data || [], leaves: leaves.data || [],
@@ -34,6 +38,7 @@ function YoneticiOzeti() {
     })
   }
 
+  if (hata) return <div className="card" style={{ borderLeft: '3px solid var(--danger)', color: 'var(--danger)', fontSize: 13.5 }}>{hata}</div>
   if (!d) return <p>Yükleniyor…</p>
 
   const acik = d.tasks.filter(t => t.durum !== 'tamamlandi')
@@ -244,17 +249,20 @@ function Islerim() {
   const { profile } = useAuth()
   const nav = useNavigate()
   const [tasks, setTasks] = useState(null)
+  const [hata, setHata] = useState('')
   const [digerAcik, setDigerAcik] = useState(false)
 
   useEffect(() => { yukle() }, [])
 
   async function yukle() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('tasks')
       .select('id, baslik, durum, bitis_tarihi, blokaj, kritik, project_id, waiting_reasons ( ad ), products ( ad ), projects ( ad )')
       .eq('sorumlu_id', profile.id)
       .neq('durum', 'tamamlandi')
       .order('bitis_tarihi', { ascending: true, nullsFirst: false })
+    if (error) { setHata('İşler yüklenemedi: ' + error.message); setTasks([]); return }
+    setHata('')
     setTasks(data || [])
   }
 
@@ -311,10 +319,16 @@ function Islerim() {
         </div>
       </div>
 
+      {hata && (
+        <div className="card" style={{ borderLeft: '3px solid var(--danger)', marginBottom: 16, color: 'var(--danger)', fontSize: 13.5 }}>
+          {hata}
+        </div>
+      )}
+
       <div className="grid grid-4" style={{ marginBottom: 22 }}>
         <div className="card kpi">
           <div className="num" style={{ color: gecikmis.length ? 'var(--danger)' : undefined }}>{gecikmis.length}</div>
-          <div className="lbl">Termini geçmiş</div>
+          <div className="lbl">Bitişi geçmiş</div>
         </div>
         <div className="card kpi">
           <div className="num">{aktif.filter(t => gunFarki(t) === 0).length}</div>
