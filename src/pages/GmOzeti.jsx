@@ -5,12 +5,35 @@ import { useAuth } from '../context/AuthContext'
 import EforModal from '../components/EforModal'
 
 export default function GmOzeti() {
-  const { seesAll } = useAuth()
-  // Yönetici (direktör/GM) → portföy özeti; diğer herkes → kişisel işler tezgahı
-  return seesAll ? <YoneticiOzeti /> : <Islerim />
+  const { seesAll, isHubYon } = useAuth()
+  const [gorunum, setGorunum] = useState('ozet')  // 'ozet' | 'islerim'
+  // Yönetim (direktör/GM/hub yöneticisi) → toggle ile hem Genel Bakış hem İşlerim
+  // Diğer herkes → doğrudan kişisel işler tezgahı
+  const yonetim = seesAll || isHubYon
+  if (!yonetim) return <Islerim />
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+        <div style={{ display: 'inline-flex', background: 'var(--paper)', borderRadius: 8, padding: 3 }}>
+          {[['ozet', 'Genel Bakış'], ['islerim', 'İşlerim']].map(([v, l]) => (
+            <button key={v} onClick={() => setGorunum(v)}
+              style={{
+                fontSize: 12.5, padding: '5px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+                border: gorunum === v ? '1px solid var(--line)' : '1px solid transparent',
+                background: gorunum === v ? 'var(--card)' : 'transparent',
+                color: gorunum === v ? 'var(--ink)' : 'var(--ink-3)'
+              }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {gorunum === 'ozet' ? <YoneticiOzeti /> : <Islerim />}
+    </>
+  )
 }
 
 function YoneticiOzeti() {
+  const { seesAll, profile } = useAuth()
   const [d, setD] = useState(null)
   const [hata, setHata] = useState('')
 
@@ -90,7 +113,7 @@ function YoneticiOzeti() {
       <div className="page-head">
         <div>
           <h1>Genel Bakış</h1>
-          <p>Portföy sağlığı ve akış · tüm hub'lar</p>
+          <p>Proje sağlığı ve akış · {seesAll ? "tüm hub'lar" : (profile.hubs?.ad || 'hub\'ınız')}</p>
         </div>
       </div>
 
@@ -157,7 +180,7 @@ function YoneticiOzeti() {
             <tr><th>Hub</th><th>Müşteri</th><th>Proje</th><th>Kişi</th></tr>
           </thead>
           <tbody>
-            {d.hubs.map(h => {
+            {d.hubs.filter(h => seesAll || h.id === profile.hub_id).map(h => {
               const s = hubSatir(h)
               return (
                 <tr key={h.id}>
