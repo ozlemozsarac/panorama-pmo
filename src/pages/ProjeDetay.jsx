@@ -146,125 +146,136 @@ export default function ProjeDetay() {
           <button className="btn" onClick={() => setModal({ ...BOS_KALEM, sorumlu_id: profile.id })}>+ İş kalemi</button>}
       </div>
 
-      {/* İLİŞKİ SAĞLIĞI — künyenin hemen altında, herkese görünür */}
-      <IliskiSagligi projectId={id} kanalim={kanalim} seesAll={seesAll} girenId={profile.id} />
-
-      {/* CS/Satış: iş kalemleri, efor ve ürün durumları KAPALI. Burada bitiyor. */}
-      {kisitliGorunum ? null : (
-      <>
-      {/* ÜRÜN DURUMLARI ŞERİDİ */}
-      {urunler.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 10 }}>Ürün durumları</div>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            {urunler.map(pp => {
-              const renk = pp.durum ? URUN_DURUM_RENK[pp.durum] : { bg: 'var(--card)', fg: 'var(--ink-3)' }
-              return (
-                <div key={pp.product_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontWeight: 500, minWidth: 64 }}>{pp.products.ad}</span>
-                  <select value={pp.durum || ''} onChange={e => urunDurumGuncelle(pp, e.target.value)}
-                    style={{ width: 'auto', background: renk.bg, color: renk.fg, fontSize: 13, padding: '5px 12px' }}>
-                    <option value="">Belirlenmedi</option>
-                    {Object.entries(URUN_DURUMLARI).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                  <VersiyonKutu deger={pp.versiyon} onSave={v => urunVersiyonGuncelle(pp, v)} />
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="filters">
-        {[
-          ['acik-tumu', `Açık işler (${acikler.length})`],
-          ['blokaj', `Bloklu (${acikler.filter(t => t.blokaj).length})`],
-          ['kritik', `Kritik (${acikler.filter(t => t.kritik).length})`],
-          ['beklemede', 'Beklemede'],
-          ['tamamlandi', 'Tamamlanan'],
-          ['tumu', 'Tümü']
-        ].map(([v, l]) => (
-          <button key={v} className={'filter-chip' + (filtre === v ? ' active' : '')} onClick={() => setFiltre(v)}>{l}</button>
-        ))}
-      </div>
-
-      {gorunen.length === 0 ? (
-        <div className="empty">
-          <strong>Bu görünümde iş kalemi yok</strong>
-          İlk kalemi eklemek için sağ üstteki düğmeyi kullanın.
+      {/* KISITLI GÖRÜNÜM (CS/Satış): sadece künye + sağlık, tam genişlik */}
+      {kisitliGorunum ? (
+        <div style={{ marginTop: 20 }}>
+          <IliskiSagligi projectId={id} kanalim={kanalim} seesAll={seesAll} girenId={profile.id} />
         </div>
       ) : (
-        <div className="card" style={{ padding: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: '32%' }}>İş</th>
-                <th>Ürün</th>
-                <th>Sorumlu</th>
-                <th>Durum</th>
-                <th>Tarih</th>
-                <th>Efor</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {gorunen.map(t => {
-                const gecikti = t.bitis_tarihi && t.durum !== 'tamamlandi' && new Date(t.bitis_tarihi) < new Date()
-                const saat = taskEfor(t.id)
-                return (
-                  <tr key={t.id} className="clickable" onClick={() => setModal({
-                    ...t,
-                    sorumlu_id: t.sorumlu_id || '', baslangic_tarihi: t.baslangic_tarihi || '', bitis_tarihi: t.bitis_tarihi || '',
-                    is_tipi_id: t.is_tipi_id || '', beklemede_nedeni_id: t.beklemede_nedeni_id || '', product_id: t.product_id || '',
-                    blokaj_nedeni: t.blokaj_nedeni || '', notlar: t.notlar || ''
-                  })}>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{t.baslik}</div>
-                      {t.work_types && <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.work_types.ad}</div>}
-                    </td>
-                    <td>{t.products ? <span className={urunChip(t.products.ad)}>{t.products.ad}</span> : "—"}</td>
-                    <td>{t.profiles?.ad || '—'}</td>
-                    <td>
-                      <span className={'chip' + (t.durum === 'tamamlandi' ? ' ok' : '')}>{DURUMLAR[t.durum]}</span>
-                      {t.durum === 'beklemede' && t.waiting_reasons &&
-                        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2 }}>{t.waiting_reasons.ad}</div>}
-                    </td>
-                    <td style={gecikti ? { color: 'var(--danger)', fontWeight: 500 } : {}}>
-                      {t.baslangic_tarihi ? fmtTarih(t.baslangic_tarihi) : '—'}
-                      {t.bitis_tarihi && <> → {fmtTarih(t.bitis_tarihi)}</>}
-                      <div style={{ marginTop: 3 }}>
-                        {t.blokaj && <span className="chip danger" title={t.blokaj_nedeni || ''}>Blokaj</span>}{' '}
-                        {t.kritik && <span className="chip warn">Kritik</span>}
-                      </div>
-                    </td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <button className="btn ghost sm" onClick={() => setEforModal(t)}>
-                        {saat > 0 ? saat + ' saat' : 'Efor ekle'}
-                      </button>
-                    </td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {t.durum !== 'tamamlandi' && yetkiliMi(t) &&
-                          <button className="btn ghost sm" onClick={() => hizliDurum(t, 'tamamlandi')}>Tamamla</button>}
-                        {yetkiliMi(t) && (
-                          <button
-                            className="btn ghost sm"
-                            disabled={saat > 0}
-                            title={saat > 0 ? 'Efor girilmiş kalem silinemez — önce efor kayıtlarını temizleyin' : 'İş kalemini sil'}
-                            style={saat > 0 ? {} : { color: 'var(--danger)' }}
-                            onClick={() => setSilModal(t)}
-                          >Sil</button>
-                        )}
-                      </div>
-                    </td>
+      <div className="proje-govde" style={{ marginTop: 20 }}>
+        {/* SOL SÜTUN: iş kalemleri */}
+        <div>
+          <div className="filters">
+            {[
+              ['acik-tumu', `Açık işler (${acikler.length})`],
+              ['blokaj', `Bloklu (${acikler.filter(t => t.blokaj).length})`],
+              ['kritik', `Kritik (${acikler.filter(t => t.kritik).length})`],
+              ['beklemede', 'Beklemede'],
+              ['tamamlandi', 'Tamamlanan'],
+              ['tumu', 'Tümü']
+            ].map(([v, l]) => (
+              <button key={v} className={'filter-chip' + (filtre === v ? ' active' : '')} onClick={() => setFiltre(v)}>{l}</button>
+            ))}
+          </div>
+
+          {gorunen.length === 0 ? (
+            <div className="empty">
+              <strong>Bu görünümde iş kalemi yok</strong>
+              İlk kalemi eklemek için sağ üstteki düğmeyi kullanın.
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: '38%' }}>İş</th>
+                    <th>Sorumlu</th>
+                    <th>Durum</th>
+                    <th>Tarih</th>
+                    <th>Efor</th>
+                    <th></th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {gorunen.map(t => {
+                    const gecikti = t.bitis_tarihi && t.durum !== 'tamamlandi' && new Date(t.bitis_tarihi) < new Date()
+                    const saat = taskEfor(t.id)
+                    return (
+                      <tr key={t.id} className="clickable" onClick={() => setModal({
+                        ...t,
+                        sorumlu_id: t.sorumlu_id || '', baslangic_tarihi: t.baslangic_tarihi || '', bitis_tarihi: t.bitis_tarihi || '',
+                        is_tipi_id: t.is_tipi_id || '', beklemede_nedeni_id: t.beklemede_nedeni_id || '', product_id: t.product_id || '',
+                        blokaj_nedeni: t.blokaj_nedeni || '', notlar: t.notlar || ''
+                      })}>
+                        <td>
+                          <div style={{ fontWeight: 500 }}>{t.baslik}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
+                            {t.work_types && <>{t.work_types.ad}</>}
+                            {t.products && <>{t.work_types ? ' · ' : ''}<span className={urunChip(t.products.ad)}>{t.products.ad}</span></>}
+                          </div>
+                        </td>
+                        <td>{t.profiles?.ad || '—'}</td>
+                        <td>
+                          <span className={'chip' + (t.durum === 'tamamlandi' ? ' ok' : '')}>{DURUMLAR[t.durum]}</span>
+                          {t.durum === 'beklemede' && t.waiting_reasons &&
+                            <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2 }}>{t.waiting_reasons.ad}</div>}
+                        </td>
+                        <td style={gecikti ? { color: 'var(--danger)', fontWeight: 500 } : {}}>
+                          {t.baslangic_tarihi ? fmtTarih(t.baslangic_tarihi) : '—'}
+                          {t.bitis_tarihi && <> → {fmtTarih(t.bitis_tarihi)}</>}
+                          <div style={{ marginTop: 3 }}>
+                            {t.blokaj && <span className="chip danger" title={t.blokaj_nedeni || ''}>Blokaj</span>}{' '}
+                            {t.kritik && <span className="chip warn">Kritik</span>}
+                          </div>
+                        </td>
+                        <td onClick={e => e.stopPropagation()}>
+                          <button className="btn ghost sm" onClick={() => setEforModal(t)}>
+                            {saat > 0 ? saat + ' saat' : 'Efor ekle'}
+                          </button>
+                        </td>
+                        <td onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            {t.durum !== 'tamamlandi' && yetkiliMi(t) &&
+                              <button className="btn ghost sm" onClick={() => hizliDurum(t, 'tamamlandi')}>Tamamla</button>}
+                            {yetkiliMi(t) && (
+                              <button
+                                className="btn ghost sm"
+                                disabled={saat > 0}
+                                title={saat > 0 ? 'Efor girilmiş kalem silinemez — önce efor kayıtlarını temizleyin' : 'İş kalemini sil'}
+                                style={saat > 0 ? {} : { color: 'var(--danger)' }}
+                                onClick={() => setSilModal(t)}
+                              >Sil</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
-      </>
+
+        {/* SAĞ SÜTUN: ilişki sağlığı + ürün durumları */}
+        <div>
+          <IliskiSagligi projectId={id} kanalim={kanalim} seesAll={seesAll} girenId={profile.id} />
+
+          {urunler.length > 0 && (
+            <div className="card" style={{ padding: 16, marginTop: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 10 }}>Ürün durumları</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {urunler.map(pp => {
+                  const renk = pp.durum ? URUN_DURUM_RENK[pp.durum] : { bg: 'var(--card)', fg: 'var(--ink-3)' }
+                  return (
+                    <div key={pp.product_id}>
+                      <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 5 }}>{pp.products.ad}</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <select value={pp.durum || ''} onChange={e => urunDurumGuncelle(pp, e.target.value)}
+                          style={{ flex: 1, minWidth: 0, background: renk.bg, color: renk.fg, fontSize: 12.5, padding: '5px 10px' }}>
+                          <option value="">Belirlenmedi</option>
+                          {Object.entries(URUN_DURUMLARI).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                        <VersiyonKutu deger={pp.versiyon} onSave={v => urunVersiyonGuncelle(pp, v)} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
       )}
 
       {/* SİLME ONAY MODALI */}
@@ -475,83 +486,71 @@ function IliskiSagligi({ projectId, kanalim, seesAll, girenId }) {
   }
 
   return (
-    <div className="card" style={{ marginTop: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <h2 style={{ margin: 0 }}>İlişki Sağlığı</h2>
-          {enKotu != null && (
-            <span className={'chip skor-' + enKotu}>Genel: {SAGLIK_SKORLARI[enKotu].etiket}</span>
-          )}
-          {uyusmazlik && (
-            <span className="uyusmazlik">⚠ Kanallar arası fark</span>
-          )}
-        </div>
-        <div className="week-nav" style={{ gap: 8 }}>
-          <button className="btn ghost sm" onClick={() => setDonem(ceyrekKaydir(donem, -1))}>←</button>
-          <span style={{ fontSize: 13, minWidth: 110, textAlign: 'center' }}>{ceyrekEtiket(donem)}</span>
-          <button className="btn ghost sm" onClick={() => setDonem(ceyrekKaydir(donem, 1))} disabled={donem === ceyrek()}>→</button>
-        </div>
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <h2 style={{ margin: 0, fontSize: 15 }}>İlişki Sağlığı</h2>
+        {enKotu != null && (
+          <span className={'chip skor-' + enKotu} style={{ fontSize: 11 }}>Genel: {SAGLIK_SKORLARI[enKotu].etiket}</span>
+        )}
       </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <button className="btn ghost sm" style={{ padding: '3px 9px' }} onClick={() => setDonem(ceyrekKaydir(donem, -1))}>←</button>
+        <span style={{ fontSize: 12.5, fontFamily: "'IBM Plex Mono', monospace", color: 'var(--ink-3)' }}>{ceyrekEtiket(donem)}</span>
+        <button className="btn ghost sm" style={{ padding: '3px 9px' }} onClick={() => setDonem(ceyrekKaydir(donem, 1))} disabled={donem === ceyrek()}>→</button>
+      </div>
+
+      {uyusmazlik && <div className="uyusmazlik" style={{ display: 'inline-block', marginBottom: 10 }}>⚠ Kanallar arası fark</div>}
+
       {yukleniyor ? <p style={{ color: 'var(--ink-3)' }}>Yükleniyor…</p> : (
-        <>
-          {/* ÜÇ KANAL */}
-          <div>
-            {['pm', 'cs', 'satis'].map(k => {
-              const r = kanalKaydi(k)
-              return (
-                <div className="kanal-satir" key={k}>
-                  <div className="kanal-ad">
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{SAGLIK_KANALLARI[k]}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
-                      {r ? `${r.profiles?.ad || '—'} · ${fmtTarih(isoDate(new Date(r.guncelleme)))}` : '—'}
+        <div>
+          {['pm', 'cs', 'satis'].map(k => {
+            const r = kanalKaydi(k)
+            const benim = k === kanalim
+            return (
+              <div key={k} style={{ padding: '9px 0', borderTop: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 500 }}>{SAGLIK_KANALLARI[k]}</span>
+                  {r
+                    ? <span className={'chip skor-' + r.skor} style={{ fontSize: 11 }}>{r.skor} · {SAGLIK_SKORLARI[r.skor].etiket}</span>
+                    : <span className="chip" style={{ fontSize: 11, color: 'var(--ink-3)' }}>Girilmedi</span>}
+                </div>
+                {r?.kok_neden && <div style={{ fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.45, marginTop: 4 }}>{r.kok_neden}</div>}
+                {r && <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{r.profiles?.ad || '—'} · {fmtTarih(isoDate(new Date(r.guncelleme)))}</div>}
+
+                {benim && (
+                  <div style={{ background: 'var(--detay)', border: '1px solid var(--line)', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginBottom: 8 }}>Senin değerlendirmen</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+                      {[1, 2, 3, 4].map(s => (
+                        <button
+                          key={s}
+                          className={'skor-btn' + (taslak.skor === s ? ' on-' + s : '')}
+                          title={SAGLIK_SKORLARI[s].aciklama}
+                          style={{ fontSize: 11.5, padding: '6px 4px', textAlign: 'center' }}
+                          onClick={() => setTaslak({ ...taslak, skor: s })}
+                        >{s} · {SAGLIK_SKORLARI[s].etiket}{taslak.skor === s ? ' ✓' : ''}</button>
+                      ))}
+                    </div>
+                    <textarea
+                      rows={2}
+                      placeholder="Kök neden / açıklama (opsiyonel)"
+                      value={taslak.kok_neden}
+                      onChange={e => setTaslak({ ...taslak, kok_neden: e.target.value })}
+                      style={{ fontSize: 12 }}
+                    />
+                    {hata && <p style={{ color: 'var(--danger)', fontSize: 12, margin: '4px 0' }}>{hata}</p>}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                      <button className="btn sm" onClick={kaydet} disabled={kaydediliyor}>
+                        {kaydediliyor ? 'Kaydediliyor…' : 'Kaydet'}
+                      </button>
                     </div>
                   </div>
-                  <div className="kanal-skor">
-                    {r
-                      ? <span className={'chip skor-' + r.skor}>{r.skor} · {SAGLIK_SKORLARI[r.skor].etiket}</span>
-                      : <span className="chip" style={{ color: 'var(--ink-3)' }}>Girilmedi</span>}
-                  </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5, flex: 1 }}>
-                    {r?.kok_neden || <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>Açıklama girilmedi</span>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* GİRİŞ PANELİ — yalnızca kendi kanalın */}
-          <div style={{ background: 'var(--detay)', border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginTop: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>
-              Senin değerlendirmen <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>· {SAGLIK_KANALLARI[kanalim]} · {ceyrekEtiket(donem)}</span>
-            </div>
-            <div className="skor-sec" style={{ marginBottom: 12 }}>
-              {[1, 2, 3, 4].map(s => (
-                <button
-                  key={s}
-                  className={'skor-btn' + (taslak.skor === s ? ' on-' + s : '')}
-                  title={SAGLIK_SKORLARI[s].aciklama}
-                  onClick={() => setTaslak({ ...taslak, skor: s })}
-                >{s} · {SAGLIK_SKORLARI[s].etiket}{taslak.skor === s ? ' ✓' : ''}</button>
-              ))}
-            </div>
-            <div className="field">
-              <label>Kök neden / açıklama</label>
-              <textarea
-                rows={2}
-                placeholder="Bu skoru neden verdin? (opsiyonel ama önerilir)"
-                value={taslak.kok_neden}
-                onChange={e => setTaslak({ ...taslak, kok_neden: e.target.value })}
-              />
-            </div>
-            {hata && <p style={{ color: 'var(--danger)', fontSize: 13, margin: '4px 0' }}>{hata}</p>}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-              <button className="btn" onClick={kaydet} disabled={kaydediliyor}>
-                {kaydediliyor ? 'Kaydediliyor…' : 'Kaydet'}
-              </button>
-            </div>
-          </div>
-        </>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
