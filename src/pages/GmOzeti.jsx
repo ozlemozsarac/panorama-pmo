@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase, haftaBasi, isoDate, parseISO, fmtTarih, urunChip, ceyrek, SAGLIK_SKORLARI } from '../lib/supabase'
+import { supabase, haftaBasi, isoDate, parseISO, fmtTarih, urunChip, ceyrek, SAGLIK_SKORLARI, DURUMLAR } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import EforModal from '../components/EforModal'
 
@@ -243,22 +243,24 @@ function YoneticiOzeti() {
 
 // ============================================================
 // İŞLERİM — PM / danışman / ekip için kişisel aktif tezgah
-// Termine göre sıralı. Gecikmiş + Bu hafta açık; Beklemede + İleride katlanır.
-// Tamamla: satırdan doğrudan. Efor: mevcut efor modalını açmak için projeye git.
+// İki görünüm: "Aciliyete göre" (tek liste, bitişe göre — varsayılan) ve
+// "Projeye göre" (katlanabilir gruplar). Toggle yalnızca 2+ projede görünür.
+// Sol şerit = aciliyet. Satır kendini anlatır: iş tipi, durum, ürün, efor.
 // ============================================================
 function Islerim() {
   const { profile } = useAuth()
   const [tasks, setTasks] = useState(null)
   const [hata, setHata] = useState('')
-  const [digerAcik, setDigerAcik] = useState(false)
   const [eforTask, setEforTask] = useState(null)
+  const [gorunum, setGorunum] = useState('aciliyet')   // 'aciliyet' | 'proje'
+  const [acikGruplar, setAcikGruplar] = useState({})   // { project_id: bool } override
 
   useEffect(() => { yukle() }, [])
 
   async function yukle() {
     const { data, error } = await supabase
       .from('tasks')
-      .select('id, baslik, durum, bitis_tarihi, blokaj, kritik, project_id, product_id, waiting_reasons ( ad ), products ( ad ), projects ( ad )')
+      .select('id, baslik, durum, bitis_tarihi, blokaj, kritik, project_id, product_id, work_types ( ad ), waiting_reasons ( ad ), products ( ad ), projects ( ad ), effort_entries ( saat )')
       .eq('sorumlu_id', profile.id)
       .neq('durum', 'tamamlandi')
       .order('bitis_tarihi', { ascending: true, nullsFirst: false })
@@ -282,7 +284,14 @@ function Islerim() {
   const aktif = tasks.filter(t => t.durum !== 'beklemede')
   const gecikmis = aktif.filter(t => t.bitis_tarihi && parseISO(t.bitis_tarihi) < bugun)
   const buHafta = aktif.filter(t => t.bitis_tarihi && parseISO(t.bitis_tarihi) >= bugun && parseISO(t.bitis_tarihi) <= buHaftaSon)
-  const ileride = aktif.filter(t => !gecikmis.includes(t) && !buHafta.includes(t))
+
+  const eforSaat = t => (t.effort_entries || []).reduce((s, e) => s + Number(e.saat), 0)
+  const seritRenk = t => {
+    if (t.durum === 'beklemede') return 'var(--line)'
+    if (gecikmis.includes(t)) return 'var(--danger)'
+    if (buHafta.includes(t)) return 'var(--warn)'
+    return 'var(--ink-3)'
+  }
 
   const terminRozet = t => {
     if (!t.bitis_tarihi) return <span style={{ color: 'var(--ink-3)' }}>tarih yok</span>
@@ -292,23 +301,68 @@ function Islerim() {
     return <span style={{ color: 'var(--ink-3)', fontFamily: "'IBM Plex Mono', monospace" }}>{fmtTarih(t.bitis_tarihi)}</span>
   }
 
-  const Satir = t => (
-    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderTop: '1px solid var(--line)' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500 }}>{t.baslik}</div>
-        <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>
-          <Link to={'/projeler/' + t.project_id}>{t.projects?.ad}</Link>
-          {t.products && <> · <span className={urunChip(t.products.ad)}>{t.products.ad}</span></>}
-          {t.blokaj && <> · <span className="chip danger">Blokaj</span></>}
-          {t.kritik && <> · <span className="chip warn">Kritik</span></>}
+  // projeGoster: aciliyet modunda true (proje adı satırda), proje modunda false (başlıkta zaten var)
+  const Satir = (t, projeGoster) => {
+    const bekl = t.durum === 'beklemede'
+    const saat = eforSaat(t)
+    return (
+      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderLeft: `4px solid ${seritRenk(t)}`, borderTop: '1px solid var(--line)', background: bekl ? 'var(--paper)' : undefined }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 500, color: bekl ? 'var(--ink-3)' : undefined }}>{t.baslik}</span>
+            <span className="chip" style={{ fontSize: 11 }}>{DURUMLAR[t.durum]}</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
+            {t.work_types && <>{t.work_types.ad}</>}
+            {projeGoster && <>{t.work_types ? ' · ' : ''}<Link to={'/projeler/' + t.project_id}>{t.projects?.ad}</Link></>}
+            {t.products && <> · <span className={urunChip(t.products.ad)}>{t.products.ad}</span></>}
+            {t.blokaj && <> · <span className="chip danger">Blokaj</span></>}
+            {t.kritik && <> · <span className="chip warn">Kritik</span></>}
+            {bekl && t.waiting_reasons && <> · {t.waiting_reasons.ad}</>}
+            {saat > 0 && <> · <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{saat} sa</span></>}
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>{terminRozet(t)}</div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button className="btn ghost sm" onClick={() => tamamla(t)}>Tamamla</button>
+          <button className="btn ghost sm" onClick={() => setEforTask(t)}>Efor</button>
         </div>
       </div>
-      <div style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>{terminRozet(t)}</div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-        <button className="btn ghost sm" onClick={() => tamamla(t)}>Tamamla</button>
-        <button className="btn ghost sm" onClick={() => setEforTask(t)}>Efor</button>
-      </div>
-    </div>
+    )
+  }
+
+  const projeSayisi = new Set(tasks.map(t => t.project_id)).size
+  const etkinGorunum = projeSayisi >= 2 ? gorunum : 'aciliyet'
+
+  // Projeye göre gruplar (aciliyete göre sıralı: gecikmişi olan üstte, sonra en yakın termin)
+  const gruplar = Object.values(tasks.reduce((acc, t) => {
+    const pid = t.project_id
+    if (!acc[pid]) acc[pid] = { pid, ad: t.projects?.ad || '—', aktifItems: [], beklItems: [] }
+    if (t.durum === 'beklemede') acc[pid].beklItems.push(t); else acc[pid].aktifItems.push(t)
+    return acc
+  }, {}))
+  gruplar.forEach(g => {
+    g.gecikmisSayi = g.aktifItems.filter(x => gecikmis.includes(x)).length
+    const tarihler = g.aktifItems.filter(x => x.bitis_tarihi).map(x => x.bitis_tarihi).sort()
+    g.enYakin = tarihler[0] || null
+    g.gecikmisVar = g.gecikmisSayi > 0
+  })
+  gruplar.sort((a, b) => {
+    if (a.gecikmisVar !== b.gecikmisVar) return a.gecikmisVar ? -1 : 1
+    if (!a.enYakin) return 1
+    if (!b.enYakin) return -1
+    return a.enYakin.localeCompare(b.enYakin)
+  })
+
+  const togBtn = (deger, etiket) => (
+    <button
+      onClick={() => setGorunum(deger)}
+      style={{
+        fontSize: 12.5, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+        border: gorunum === deger ? '1px solid var(--line)' : '1px solid transparent',
+        background: gorunum === deger ? 'var(--card)' : 'transparent',
+        color: gorunum === deger ? 'var(--ink)' : 'var(--ink-3)'
+      }}>{etiket}</button>
   )
 
   return (
@@ -316,7 +370,7 @@ function Islerim() {
       <div className="page-head">
         <div>
           <h1>İşlerim</h1>
-          <p>Bugün üstünde olan işler · bitiş tarihine göre sıralı</p>
+          <p>Üstümdeki açık işler · bitiş tarihine göre sıralı</p>
         </div>
       </div>
 
@@ -345,43 +399,45 @@ function Islerim() {
         </div>
       </div>
 
+      {projeSayisi >= 2 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'inline-flex', background: 'var(--paper)', borderRadius: 8, padding: 3 }}>
+            {togBtn('aciliyet', 'Aciliyete göre')}
+            {togBtn('proje', 'Projeye göre')}
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{projeSayisi} proje · {aktif.length + beklemede.length} açık iş</span>
+        </div>
+      )}
+
       {tasks.length === 0 && (
         <div className="empty"><strong>Üstünde açık iş yok</strong>Sana atanmış tamamlanmamış iş kalemi bulunmuyor.</div>
       )}
 
-      {gecikmis.length > 0 && (
-        <>
-          <h2 style={{ color: 'var(--danger)', fontSize: 15 }}>Gecikmiş</h2>
-          <div className="card" style={{ padding: 0, marginBottom: 20, borderTop: 'none' }}>{gecikmis.map(Satir)}</div>
-        </>
-      )}
-
-      {buHafta.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 15 }}>Bu hafta</h2>
-          <div className="card" style={{ padding: 0, marginBottom: 20, borderTop: 'none' }}>{buHafta.map(Satir)}</div>
-        </>
-      )}
-
-      {(ileride.length > 0 || beklemede.length > 0) && (
-        <div style={{ marginTop: 4 }}>
-          <button className="btn ghost" onClick={() => setDigerAcik(!digerAcik)}>
-            {digerAcik ? '▾' : '▸'} Diğer işler ({ileride.length + beklemede.length})
-          </button>
-          {digerAcik && (
-            <div style={{ marginTop: 12 }}>
-              {ileride.length > 0 && <>
-                <h2 style={{ fontSize: 14, color: 'var(--ink-2)' }}>İleride</h2>
-                <div className="card" style={{ padding: 0, marginBottom: 16, borderTop: 'none' }}>{ileride.map(Satir)}</div>
-              </>}
-              {beklemede.length > 0 && <>
-                <h2 style={{ fontSize: 14, color: 'var(--ink-2)' }}>Beklemede</h2>
-                <div className="card" style={{ padding: 0, borderTop: 'none' }}>{beklemede.map(Satir)}</div>
-              </>}
-            </div>
-          )}
+      {tasks.length > 0 && etkinGorunum === 'aciliyet' && (
+        <div className="card" style={{ padding: 0, borderTop: 'none', overflow: 'hidden' }}>
+          {aktif.map(t => Satir(t, true))}
+          {beklemede.map(t => Satir(t, true))}
         </div>
       )}
+
+      {tasks.length > 0 && etkinGorunum === 'proje' && gruplar.map(g => {
+        const acik = acikGruplar[g.pid] ?? g.gecikmisVar
+        return (
+          <div key={g.pid} className="card" style={{ padding: 0, marginBottom: 12, borderTop: 'none', overflow: 'hidden' }}>
+            <button
+              onClick={() => setAcikGruplar(s => ({ ...s, [g.pid]: !(s[g.pid] ?? g.gecikmisVar) }))}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--paper)', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+              <span style={{ fontSize: 15, color: 'var(--ink-3)' }}>{acik ? '▾' : '▸'}</span>
+              <span style={{ fontWeight: 500, fontSize: 14, color: 'var(--ink)' }}>{g.ad}</span>
+              {g.gecikmisSayi > 0 && <span className="chip danger" style={{ fontSize: 11 }}>{g.gecikmisSayi} gecikmiş</span>}
+              <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{g.aktifItems.length} açık{g.beklItems.length ? ` · ${g.beklItems.length} beklemede` : ''}</span>
+              <span style={{ flex: 1 }} />
+              {g.enYakin && <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: "'IBM Plex Mono', monospace" }}>en yakın {fmtTarih(g.enYakin)}</span>}
+            </button>
+            {acik && <div>{[...g.aktifItems, ...g.beklItems].map(t => Satir(t, false))}</div>}
+          </div>
+        )
+      })}
 
       {eforTask && (
         <EforModal
