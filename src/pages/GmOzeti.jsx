@@ -22,7 +22,7 @@ function YoneticiOzeti() {
       supabase.from('customers').select('id, hub_id'),
       supabase.from('projects').select('id, ad, aktif, customers ( hub_id, ad )').eq('aktif', true),
       supabase.from('profiles').select('id, ad, hub_id, aktif, yetki_rolu, job_titles ( ad )').eq('aktif', true),
-      supabase.from('tasks').select('id, project_id, durum, blokaj, kritik, termin, waiting_reasons ( ad ), projects ( ad, customers ( hub_id ) )'),
+      supabase.from('tasks').select('id, project_id, durum, blokaj, kritik, bitis_tarihi, waiting_reasons ( ad ), projects ( ad, customers ( hub_id ) )'),
       supabase.from('effort_entries').select('user_id, project_id, saat').eq('hafta_baslangici', haftaStr),
       supabase.from('leaves').select('user_id, baslangic, bitis, profiles ( ad )').lte('baslangic', bugun).gte('bitis', bugun),
       supabase.from('project_health').select('project_id, kanal, skor, projects ( ad, aktif, customers ( hubs ( ad ) ) )').eq('donem', ceyrek())
@@ -38,7 +38,7 @@ function YoneticiOzeti() {
 
   const acik = d.tasks.filter(t => t.durum !== 'tamamlandi')
   const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
-  const geciken = acik.filter(t => t.termin && parseISO(t.termin) < bugun)
+  const geciken = acik.filter(t => t.bitis_tarihi && parseISO(t.bitis_tarihi) < bugun)
   const eforSaat = d.effort.reduce((s, e) => s + Number(e.saat), 0)
   const eforGiren = new Set(d.effort.map(e => e.user_id)).size
   const eforBekleyen = d.profiles.filter(p => !['gm', 'direktor'].includes(p.yetki_rolu)).length - eforGiren
@@ -199,7 +199,7 @@ function YoneticiOzeti() {
                   <tr key={t.id}>
                     <td>
                       <Link to={'/projeler/' + t.project_id}>{t.projects?.ad}</Link>
-                      <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{t.termin ? 'Termin: ' + fmtTarih(t.termin) : ''}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{t.bitis_tarihi ? 'Bitiş: ' + fmtTarih(t.bitis_tarihi) : ''}</div>
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       {t.blokaj && <span className="chip danger">Blokaj</span>}{' '}
@@ -251,10 +251,10 @@ function Islerim() {
   async function yukle() {
     const { data } = await supabase
       .from('tasks')
-      .select('id, baslik, durum, termin, blokaj, kritik, project_id, waiting_reasons ( ad ), products ( ad ), projects ( ad )')
+      .select('id, baslik, durum, bitis_tarihi, blokaj, kritik, project_id, waiting_reasons ( ad ), products ( ad ), projects ( ad )')
       .eq('sorumlu_id', profile.id)
       .neq('durum', 'tamamlandi')
-      .order('termin', { ascending: true, nullsFirst: false })
+      .order('bitis_tarihi', { ascending: true, nullsFirst: false })
     setTasks(data || [])
   }
 
@@ -267,20 +267,20 @@ function Islerim() {
 
   const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
   const buHaftaSon = new Date(bugun); buHaftaSon.setDate(buHaftaSon.getDate() + (7 - ((bugun.getDay() + 6) % 7)))
-  const gunFarki = t => t.termin ? Math.round((parseISO(t.termin) - bugun) / 86400000) : null
+  const gunFarki = t => t.bitis_tarihi ? Math.round((parseISO(t.bitis_tarihi) - bugun) / 86400000) : null
 
   const beklemede = tasks.filter(t => t.durum === 'beklemede')
   const aktif = tasks.filter(t => t.durum !== 'beklemede')
-  const gecikmis = aktif.filter(t => t.termin && parseISO(t.termin) < bugun)
-  const buHafta = aktif.filter(t => t.termin && parseISO(t.termin) >= bugun && parseISO(t.termin) <= buHaftaSon)
+  const gecikmis = aktif.filter(t => t.bitis_tarihi && parseISO(t.bitis_tarihi) < bugun)
+  const buHafta = aktif.filter(t => t.bitis_tarihi && parseISO(t.bitis_tarihi) >= bugun && parseISO(t.bitis_tarihi) <= buHaftaSon)
   const ileride = aktif.filter(t => !gecikmis.includes(t) && !buHafta.includes(t))
 
   const terminRozet = t => {
-    if (!t.termin) return <span style={{ color: 'var(--ink-3)' }}>termin yok</span>
+    if (!t.bitis_tarihi) return <span style={{ color: 'var(--ink-3)' }}>tarih yok</span>
     const g = gunFarki(t)
-    if (g < 0) return <span style={{ color: 'var(--danger)', fontFamily: "'IBM Plex Mono', monospace" }}>{fmtTarih(t.termin)} · {-g}g geç</span>
+    if (g < 0) return <span style={{ color: 'var(--danger)', fontFamily: "'IBM Plex Mono', monospace" }}>{fmtTarih(t.bitis_tarihi)} · {-g}g geç</span>
     if (g === 0) return <span style={{ color: 'var(--warn)', fontFamily: "'IBM Plex Mono', monospace" }}>bugün</span>
-    return <span style={{ color: 'var(--ink-3)', fontFamily: "'IBM Plex Mono', monospace" }}>{fmtTarih(t.termin)}</span>
+    return <span style={{ color: 'var(--ink-3)', fontFamily: "'IBM Plex Mono', monospace" }}>{fmtTarih(t.bitis_tarihi)}</span>
   }
 
   const Satir = t => (
@@ -307,7 +307,7 @@ function Islerim() {
       <div className="page-head">
         <div>
           <h1>İşlerim</h1>
-          <p>Bugün üstünde olan işler · termine göre sıralı</p>
+          <p>Bugün üstünde olan işler · bitiş tarihine göre sıralı</p>
         </div>
       </div>
 
@@ -318,7 +318,7 @@ function Islerim() {
         </div>
         <div className="card kpi">
           <div className="num">{aktif.filter(t => gunFarki(t) === 0).length}</div>
-          <div className="lbl">Bugün terminli</div>
+          <div className="lbl">Bugün bitişli</div>
         </div>
         <div className="card kpi">
           <div className="num">{buHafta.length}</div>
