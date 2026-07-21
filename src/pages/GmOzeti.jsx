@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { supabase, haftaBasi, isoDate, parseISO, fmtTarih, urunChip, ceyrek, SAGLIK_SKORLARI } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import EforModal from '../components/EforModal'
 
 export default function GmOzeti() {
   const { seesAll } = useAuth()
@@ -247,17 +248,17 @@ function YoneticiOzeti() {
 // ============================================================
 function Islerim() {
   const { profile } = useAuth()
-  const nav = useNavigate()
   const [tasks, setTasks] = useState(null)
   const [hata, setHata] = useState('')
   const [digerAcik, setDigerAcik] = useState(false)
+  const [eforTask, setEforTask] = useState(null)
 
   useEffect(() => { yukle() }, [])
 
   async function yukle() {
     const { data, error } = await supabase
       .from('tasks')
-      .select('id, baslik, durum, bitis_tarihi, blokaj, kritik, project_id, waiting_reasons ( ad ), products ( ad ), projects ( ad )')
+      .select('id, baslik, durum, bitis_tarihi, blokaj, kritik, project_id, product_id, waiting_reasons ( ad ), products ( ad ), projects ( ad )')
       .eq('sorumlu_id', profile.id)
       .neq('durum', 'tamamlandi')
       .order('bitis_tarihi', { ascending: true, nullsFirst: false })
@@ -305,7 +306,7 @@ function Islerim() {
       <div style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>{terminRozet(t)}</div>
       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
         <button className="btn ghost sm" onClick={() => tamamla(t)}>Tamamla</button>
-        <button className="btn ghost sm" onClick={() => nav('/projeler/' + t.project_id)}>Efor</button>
+        <button className="btn ghost sm" onClick={() => setEforTask(t)}>Efor</button>
       </div>
     </div>
   )
@@ -380,6 +381,15 @@ function Islerim() {
             </div>
           )}
         </div>
+      )}
+
+      {eforTask && (
+        <EforModal
+          task={eforTask}
+          girenId={profile.id}
+          onClose={() => setEforTask(null)}
+          onSaved={yukle}
+        />
       )}
     </>
   )

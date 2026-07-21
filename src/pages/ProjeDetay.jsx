@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, haftaBasi, isoDate, parseISO, urunChip, SAGLIK_KANALLARI, SAGLIK_SKORLARI, ceyrek, ceyrekKaydir, ceyrekEtiket } from '../lib/supabase'
+import { supabase, DURUMLAR, URUN_DURUMLARI, URUN_DURUM_RENK, fmtTarih, isoDate, urunChip, SAGLIK_KANALLARI, SAGLIK_SKORLARI, ceyrek, ceyrekKaydir, ceyrekEtiket } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import EforModal from '../components/EforModal'
 
 const BOS_KALEM = {
   baslik: '', durum: 'acik', sorumlu_id: '', baslangic_tarihi: '', bitis_tarihi: '',
@@ -11,7 +12,7 @@ const BOS_KALEM = {
 
 export default function ProjeDetay() {
   const { id } = useParams()
-  const { profile, seesAll, kisitliGorunum, kanalim } = useAuth()
+  const { profile, seesAll, isHubYon, kisitliGorunum, kanalim } = useAuth()
   const [proje, setProje] = useState(null)
   const [tasks, setTasks] = useState([])
   const [ekip, setEkip] = useState([])
@@ -21,7 +22,7 @@ export default function ProjeDetay() {
   const [eforlar, setEforlar] = useState([])       // bu projedeki tüm efor kayıtları
   const [filtre, setFiltre] = useState('acik-tumu')
   const [modal, setModal] = useState(null)
-  const [eforModal, setEforModal] = useState(null) // { task, hafta }
+  const [eforModal, setEforModal] = useState(null) // efor girilecek iş kalemi (task)
   const [silModal, setSilModal] = useState(null)   // silinecek iş kalemi
   const [err, setErr] = useState('')
 
@@ -72,7 +73,7 @@ export default function ProjeDetay() {
     ;['profiles', 'work_types', 'waiting_reasons', 'products', 'olusturma', 'tamamlanma', 'olusturan_id'].forEach(f => delete k[f])
 
     const isNew = !k.id
-    if (isNew) delete k.id
+    if (isNew) { delete k.id; k.olusturan_id = profile.id }
     const { error } = isNew
       ? await supabase.from('tasks').insert(k)
       : await supabase.from('tasks').update(k).eq('id', modal.id)
@@ -83,26 +84,6 @@ export default function ProjeDetay() {
 
   async function hizliDurum(t, durum) {
     await supabase.from('tasks').update({ durum }).eq('id', t.id)
-    yukle()
-  }
-
-  // Bir iş kalemine haftalık efor ekle/güncelle
-  async function eforKaydet(task, haftaStr, saat) {
-    const v = parseFloat(String(saat).replace(',', '.'))
-    const mevcut = eforlar.find(e => e.task_id === task.id && e.hafta_baslangici === haftaStr)
-    let error = null
-    if (!v || v <= 0) {
-      if (mevcut) ({ error } = await supabase.from('effort_entries').delete().eq('id', mevcut.id))
-    } else if (mevcut) {
-      ({ error } = await supabase.from('effort_entries').update({ saat: v }).eq('id', mevcut.id))
-    } else {
-      ({ error } = await supabase.from('effort_entries').insert({
-        user_id: profile.id, project_id: id, task_id: task.id,
-        hafta_baslangici: haftaStr, saat: v, product_id: task.product_id
-      }))
-    }
-    if (error) { setErr('Efor kaydedilemedi: ' + error.message); return }
-    setEforModal(null)
     yukle()
   }
 
@@ -126,7 +107,19 @@ export default function ProjeDetay() {
 
   if (!proje) return <p>Yükleniyor…</p>
 
-  // Silme yetkisi: projeye atanmış kişiler + Direktör/GM (PMO)
+  // --- M3: Tamamla/Sil yetkisi (Seçenek C) ---
+  // Yetkili = oluşturan VEYA sorumlu VEYA proje lideri; artı PMO (direktör/GM)
+  // ve projenin hub yöneticisi her zaman yönetebilir.
+  const projeLiderIdleri = (proje.project_assignments || [])
+    .filter(a => a.proje_lideri).map(a => a.profiles?.id).filter(Boolean)
+  const projeLideriMiyim = projeLiderIdleri.includes(profile.id)
+  const hubYoneticisiyim = isHubYon && profile.hub_id === proje.customers?.hub_id
+  const yetkiliMi = t =>
+    seesAll || hubYoneticisiyim ||
+    t.olusturan_id === profile.id ||
+    t.sorumlu_id === profile.id ||
+    projeLideriMiyim
+
   const acikler = tasks.filter(t => t.durum !== 'tamamlandi')
   const gorunen = tasks.filter(t => {
     if (filtre === 'acik-tumu') return t.durum !== 'tamamlandi'
@@ -245,15 +238,15 @@ export default function ProjeDetay() {
                       </div>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
-                      <button className="btn ghost sm" onClick={() => setEforModal({ task: t, hafta: isoDate(haftaBasi()) })}>
+                      <button className="btn ghost sm" onClick={() => setEforModal(t)}>
                         {saat > 0 ? saat + ' saat' : 'Efor ekle'}
                       </button>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {t.durum !== 'tamamlandi' &&
+                        {t.durum !== 'tamamlandi' && yetkiliMi(t) &&
                           <button className="btn ghost sm" onClick={() => hizliDurum(t, 'tamamlandi')}>Tamamla</button>}
-                        {(seesAll || t.olusturan_id === profile.id) && (
+                        {yetkiliMi(t) && (
                           <button
                             className="btn ghost sm"
                             disabled={saat > 0}
@@ -386,18 +379,14 @@ export default function ProjeDetay() {
         </div>
       )}
 
-      {/* EFOR EKLE MODAL */}
+      {/* EFOR EKLE MODAL — paylaşılan bileşen (M5) */}
       {eforModal && (
-        <div className="modal-bg" onClick={() => setEforModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
-            <h2>Efor ekle</h2>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-2)', marginTop: -8 }}>
-              <strong>{eforModal.task.baslik}</strong> · saat cinsinden, seçili haftaya
-            </p>
-            <EforForm task={eforModal.task} eforlar={eforlar} onSave={eforKaydet} onCancel={() => setEforModal(null)} />
-            {err && <div className="msg err">{err}</div>}
-          </div>
-        </div>
+        <EforModal
+          task={eforModal}
+          girenId={profile.id}
+          onClose={() => setEforModal(null)}
+          onSaved={yukle}
+        />
       )}
     </>
   )
@@ -431,57 +420,6 @@ function VersiyonKutu({ deger, onSave }) {
       onBlur={() => v !== (deger || '') && onSave(v)}
       placeholder="Versiyon"
       style={{ width: 130, fontSize: 12.5, fontFamily: "'IBM Plex Mono', monospace", padding: '5px 10px' }} />
-  )
-}
-
-// İş kalemine haftalık efor girişi (birden çok hafta yönetilebilir)
-function EforForm({ task, eforlar, onSave, onCancel }) {
-  const [hafta, setHafta] = useState(isoDate(haftaBasi()))
-  const [saat, setSaat] = useState('')
-
-  const mevcutlar = eforlar.filter(e => e.task_id === task.id).sort((a, b) => a.hafta_baslangici.localeCompare(b.hafta_baslangici))
-
-  function haftaKaydir(n) {
-    const d = parseISO(hafta); d.setDate(d.getDate() + 7 * n); setHafta(isoDate(haftaBasi(d)))
-  }
-  const mevcutSaat = eforlar.find(e => e.task_id === task.id && e.hafta_baslangici === hafta)?.saat
-
-  const hs = parseISO(hafta); const he = parseISO(hafta); he.setDate(he.getDate() + 6)
-
-  return (
-    <>
-      {mevcutlar.length > 0 && (
-        <div style={{ marginBottom: 14, fontSize: 13 }}>
-          <div style={{ color: 'var(--ink-3)', marginBottom: 4 }}>Girilmiş haftalar:</div>
-          {mevcutlar.map(e => (
-            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-              <span>{fmtTarih(e.hafta_baslangici)} haftası</span>
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{Number(e.saat)} saat</span>
-            </div>
-          ))}
-          <div style={{ borderTop: '1px solid var(--line)', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontWeight: 500 }}>
-            <span>Toplam</span>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{mevcutlar.reduce((s, e) => s + Number(e.saat), 0)} saat</span>
-          </div>
-        </div>
-      )}
-      <div className="field">
-        <label>Hafta</label>
-        <div className="week-nav" style={{ justifyContent: 'space-between' }}>
-          <button type="button" className="btn ghost sm" onClick={() => haftaKaydir(-1)}>←</button>
-          <span style={{ fontSize: 13 }}>{fmtTarih(isoDate(hs))} – {fmtTarih(isoDate(he))}</span>
-          <button type="button" className="btn ghost sm" onClick={() => haftaKaydir(1)}>→</button>
-        </div>
-      </div>
-      <div className="field">
-        <label>Saat {mevcutSaat != null && <span style={{ color: 'var(--ink-3)' }}>(mevcut: {Number(mevcutSaat)})</span>}</label>
-        <input inputMode="decimal" placeholder="0" value={saat} onChange={e => setSaat(e.target.value)} autoFocus />
-      </div>
-      <div className="modal-actions">
-        <button type="button" className="btn ghost" onClick={onCancel}>Kapat</button>
-        <button type="button" className="btn" onClick={() => onSave(task, hafta, saat)}>Kaydet</button>
-      </div>
-    </>
   )
 }
 
