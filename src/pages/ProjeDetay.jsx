@@ -21,6 +21,7 @@ export default function ProjeDetay() {
   const [nedenler, setNedenler] = useState([])
   const [eforlar, setEforlar] = useState([])       // bu projedeki tüm efor kayıtları
   const [filtre, setFiltre] = useState('acik-tumu')
+  const [sorumluFiltre, setSorumluFiltre] = useState('herkes')
   const [modal, setModal] = useState(null)
   const [eforModal, setEforModal] = useState(null) // efor girilecek iş kalemi (task)
   const [silModal, setSilModal] = useState(null)   // silinecek iş kalemi
@@ -120,8 +121,10 @@ export default function ProjeDetay() {
     t.sorumlu_id === profile.id ||
     projeLideriMiyim
 
-  const acikler = tasks.filter(t => t.durum !== 'tamamlandi')
+  const sorumluyaGore = t => sorumluFiltre === 'herkes' || (sorumluFiltre === 'bana-ait' ? t.sorumlu_id === profile.id : t.sorumlu_id === sorumluFiltre)
+  const acikler = tasks.filter(t => t.durum !== 'tamamlandi' && sorumluyaGore(t))
   const gorunen = tasks.filter(t => {
+    if (!sorumluyaGore(t)) return false
     if (filtre === 'acik-tumu') return t.durum !== 'tamamlandi'
     if (filtre === 'blokaj') return t.blokaj && t.durum !== 'tamamlandi'
     if (filtre === 'kritik') return t.kritik && t.durum !== 'tamamlandi'
@@ -155,7 +158,7 @@ export default function ProjeDetay() {
       <div className="proje-govde" style={{ marginTop: 20 }}>
         {/* SOL SÜTUN: iş kalemleri */}
         <div>
-          <div className="filters">
+          <div className="filters" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {[
               ['acik-tumu', `Açık işler (${acikler.length})`],
               ['blokaj', `Bloklu (${acikler.filter(t => t.blokaj).length})`],
@@ -166,6 +169,18 @@ export default function ProjeDetay() {
             ].map(([v, l]) => (
               <button key={v} className={'filter-chip' + (filtre === v ? ' active' : '')} onClick={() => setFiltre(v)}>{l}</button>
             ))}
+            <span style={{ flex: 1 }} />
+            <select
+              value={sorumluFiltre}
+              onChange={e => setSorumluFiltre(e.target.value)}
+              style={{ width: 'auto', fontSize: 12.5, padding: '6px 12px' }}
+            >
+              <option value="herkes">Sorumlu: Herkes</option>
+              <option value="bana-ait">Sorumlu: Bana ait</option>
+              {ekip.filter(e => e.id !== profile.id).map(e => (
+                <option key={e.id} value={e.id}>Sorumlu: {e.ad}</option>
+              ))}
+            </select>
           </div>
 
           {gorunen.length === 0 ? (
