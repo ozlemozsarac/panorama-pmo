@@ -27,6 +27,7 @@ export default function EforModal({ task, girenId, onClose, onSaved }) {
       .from('effort_entries')
       .select('*')
       .eq('task_id', task.id)
+      .eq('user_id', girenId)
     if (error) { setHata('Efor yüklenemedi: ' + error.message); setEforlar([]); setYukleniyor(false); return }
     setHata('')
     setEforlar(data || [])
